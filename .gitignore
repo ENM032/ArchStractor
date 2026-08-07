@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.vscode/
+.idea/
+
+# Ignore backups
+*.bak
+
+# Ignore local extraction log
+extraction.log
