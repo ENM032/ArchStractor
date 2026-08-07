@@ -17,12 +17,19 @@ sequenceDiagram
     participant Parser as parser.py
     participant Validator as validator.py
 
-    User/CLI->>Main: Execute with arguments
+    alt Interactive Wizard Mode
+        User/CLI->>Main: Execute python src/main.py (no args, interactive TTY)
+        Main->>User/CLI: Display Wizard prompts & read configurations
+    else Direct CLI Mode
+        User/CLI->>Main: Execute with arguments (e.g. --game, --output)
+    end
+
     Main->>Formatter: parse_existing_dataset(output_path)
     Formatter-->>Main: Return (existing_data, last_completed_day, last_completed_year)
     
-    loop For each year in range
+    loop For each year in range (Concurrent Scraping)
         Main->>Scraper: fetch_page(year_url)
+        Note over Scraper: Load from cache if year < current_year and exists
         Scraper-->>Main: Return HTML content
         Main->>Parser: parse_html_page(html)
         Parser-->>Main: Return (draws, detected_schema)
@@ -81,8 +88,10 @@ sequenceDiagram
 
 ### `src/main.py`
 - **Purpose**: The main orchestration script. It parses terminal options, manages safety backups, computes cutoff offsets, and manages logs.
+- **Interactive Configuration Wizard**:
+  If the application is run with no parameters (`len(sys.argv) == 1`) in an interactive terminal context (`sys.stdin.isatty()`), it starts a wizard prompting the user to select the game preset, year bounds, and output destination path on the fly.
 - **Dynamic Cutoff Logic**:
-  Instead of hardcoding a date threshold, `main.py` parses the ball values of the very last completed entry in the target file (supports both string extraction for TXT, and dictionary inspection for CSV/JSON/SQLite). It then runs a chronological search through the newly scraped entries. Once it finds an entry with identical ball values, it sets that date as the `cutoff_date`. All scraped draws on or before this date are safely ignored.
+  Instead of hardcoding a date threshold, `main.py` parses the ball values of the very last completed entry in the target file. It then runs a chronological search through the newly scraped entries. Once it finds an entry with identical ball values, it sets that date as the `cutoff_date`. All scraped draws on or before this date are safely ignored.
 - **Atomic File Backups**:
   Before calling the write module, `main.py` copies the target file to `{filename}.bak`. If the write fails due to disk operations (`IOError`), it attempts to restore the backup file, preventing data corruption.
 
@@ -94,17 +103,18 @@ sequenceDiagram
 
 ---
 
-## 3. Customizing or Extending the Tool
+## 4. Containerization & Tooling
 
-### Adding a Game Preset
-To add a new preset game shortcut (like standard `lotto`):
-1. In `src/main.py`, update `choices` in the `argparse` configuration:
-   ```python
-   parser.add_argument("--game", "-g", choices=["powerball", "powerball-xtra", "lotto"])
-   ```
-2. Map the game to its national-lottery URL template in the template resolution block:
-   ```python
-   if game == "lotto":
-       url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
-   ```
-3. The parser will automatically adapt to standard Lotto's schema (`6 main, 1 bonusball`) on-the-fly due to the dynamic schema detector!
+### Docker & Docker Compose
+The application is fully containerized to run in any isolated environment:
+- **`Dockerfile`**: Builds a lightweight image using `python:3.11-slim` and installs requirements compiled in `requirements.txt`. It sets `ENTRYPOINT ["python", "src/main.py"]` to transparently forward container arguments.
+- **`docker-compose.yml`**: Defines volume mappings:
+  - Maps `./data` directory to persist dataset files on the host machine.
+  - Maps `./.cache` to preserve scraped HTML pages on the host across builds and executions.
+  - Maps `./extraction.log` to write execution history.
+  - Confirms `stdin_open: true` and `tty: true` to support running the Interactive Wizard in Docker.
+
+### Automated GitHub Actions CI
+- **Configuration Path**: `.github/workflows/verify-dataset.yml`
+- **Job Purpose**: Triggers on `push` or `pull_request` affecting `data/**` or `src/**`.
+- **Process**: Sets up a Python virtual machine, installs requirements, and runs `python src/verify.py` on the datasets in `data/`. If any format validation or sequencing indexing checks fail, the workflow run fails immediately, safeguarding the repository against invalid dataset check-ins.

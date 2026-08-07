@@ -9,9 +9,10 @@ Welcome to the **ArcStractor** User Guide! This document is designed for average
 2. [Prerequisites](#2-prerequisites)
 3. [Installation](#3-installation)
 4. [Running the Tool](#4-running-the-tool)
-5. [Supported Output Formats](#5-supported-output-formats)
-6. [Verifying Your Data](#6-verifying-your-data)
-7. [Understanding Backups and Logs](#7-understanding-backups-and-logs)
+5. [Docker Execution (Zero-Setup)](#5-docker-execution-zero-setup)
+6. [Supported Output Formats](#6-supported-output-formats)
+7. [Verifying Your Data](#7-verifying-your-data)
+8. [Understanding Backups and Logs](#8-understanding-backups-and-logs)
 
 ---
 
@@ -24,7 +25,7 @@ If the target file already contains data, the tool is smart enough to start exac
 
 ## 2. Prerequisites
 
-Before using the tool, you need to have **Python** installed on your computer.
+Before using the tool, you need to have **Python** installed on your computer. (If you prefer to run it using **Docker**, you only need Docker installed; see the Docker section below).
 
 ### Installing Python
 1. **Download**: Visit [python.org/downloads](https://www.python.org/downloads/) and download the installer for your operating system (Windows, macOS, or Linux).
@@ -41,59 +42,75 @@ Before using the tool, you need to have **Python** installed on your computer.
 
 ## 3. Installation
 
-Once Python is installed, download this project folder. Next, we need to install two helper packages (called "libraries") that help Python fetch web pages and parse them.
+Once Python is installed, download this project folder. Next, install required helper libraries:
 
 Open your terminal, navigate to this project folder, and run:
 
 ```bash
-pip install requests beautifulsoup4
+pip install -r requirements.txt
 ```
 
 This will automatically download and install:
 - **`requests`**: Used to fetch the archive webpages.
-- **`beautifulsoup4`**: Used to read and extract results tables from the webpage's code.
+- **`beautifulsoup4`**: Used to read and extract results tables.
 
 ---
 
 ## 4. Running the Tool
 
-You run the tool using command-line commands. Navigate your terminal to the project root directory, and choose one of the options below.
+You run the tool using command-line commands. Navigate your terminal to the project root directory.
 
-### Option A: Standard Run (Original PowerBall TXT)
-To run the extractor with default settings (which retrieves South African PowerBall results for years 2010 through 2026 and updates the existing `data/dataset_2.txt`):
+### Option A: Interactive CLI Wizard (Easiest)
+If you run the script with **no arguments** in an interactive terminal, ArcStractor will launch a configuration wizard that walks you through setting up your extraction (choosing the game, starting/ending years, and output path):
 
 ```bash
 python src/main.py
 ```
 
-### Option B: Retrieve a Different Game and Format
-If you want to extract a different game like **PowerBall Xtra**, starting from a specific year range (e.g. 2015 to 2026), and save it to a new file in a different format (like **CSV** or **JSON** or **SQLite database**), simply specify the appropriate file extension in the `--output` path:
+Follow the prompts on your screen and press `Enter` to accept defaults.
 
-**For CSV (Excel compatible)**:
+### Option B: Direct Command Line (Advanced)
+If you want to bypass the prompt wizard and run it directly with custom flags, append options like so:
+
 ```bash
 python src/main.py --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.csv
 ```
 
-**For JSON (Web/Developer compatible)**:
-```bash
-python src/main.py --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.json
-```
-
-**For SQLite Database (SQL queries compatible)**:
-```bash
-python src/main.py --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.db
-```
-
-### Command Options Reference
-You can customize how the tool runs by appending "flags" to the command:
-- `--start-year` (or `-s`): The first year you want to retrieve results for (e.g., `2018`).
+**Command Options Reference**:
+- `--start-year` (or `-s`): The first year to retrieve (e.g., `2018`).
 - `--end-year` (or `-e`): The last year to retrieve (e.g., `2026`).
 - `--game` (or `-g`): Choose between `powerball` or `powerball-xtra`.
 - `--output` (or `-o`): The path where the file will be saved. The extension of this file (`.txt`, `.csv`, `.json`, `.db`, `.sqlite`) determines its output format!
 
 ---
 
-## 5. Supported Output Formats
+## 5. Docker Execution (Zero-Setup)
+
+If you have **Docker** and **Docker Compose** installed on your system, you can execute the tool without installing Python or any libraries locally.
+
+### 1. Build the Container
+Navigate to the project directory and run:
+```bash
+docker-compose build
+```
+
+### 2. Run the Interactive Wizard in Docker
+To launch the interactive configuration prompt inside the container:
+```bash
+docker-compose run extractor
+```
+
+### 3. Run with Arguments in Docker
+To run direct commands through Docker:
+```bash
+docker-compose run extractor --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.csv
+```
+
+All datasets generated inside Docker are saved directly to your local computer's `data/` folder (and caching is preserved inside `.cache/`) because volumes are mapped automatically.
+
+---
+
+## 6. Supported Output Formats
 
 ArcStractor automatically determines how to read and write your data based on your file path extension:
 
@@ -104,7 +121,7 @@ ArcStractor automatically determines how to read and write your data based on yo
 
 ---
 
-## 6. Verifying Your Data
+## 7. Verifying Your Data
 
 To verify that your dataset file was written correctly, is formatted properly, and has no missing sequences or duplicate numbers, you can run the validation script.
 
@@ -126,7 +143,7 @@ If everything is healthy, you will see this success message:
 
 ---
 
-## 7. Understanding Backups and Logs
+## 8. Understanding Backups and Logs
 
 ArcStractor has safety measures built in so you don't lose your data:
 

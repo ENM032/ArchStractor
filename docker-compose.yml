@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  extractor:
+    build: .
+    image: arcstractor:latest
+    container_name: arcstractor_runner
+    volumes:
+      # Persists outputs to the host data/ directory
+      - ./data:/app/data
+      # Persists scraper HTML cache files on the host
+      - ./.cache:/app/.cache
+      # Redirects log output to the host file
+      - ./extraction.log:/app/extraction.log
+    # Disable TTY requirement for headless execution by default,
+    # but allow interactive wizard execution using: docker-compose run extractor
+    stdin_open: true
+    tty: true

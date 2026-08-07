@@ -66,7 +66,6 @@ def fetch_and_parse_year(
         
         year_new_draws = []
         for draw_date, main_balls, powerball in draws:
-            # Use validator to check data correctness under dynamic schema
             is_valid, err_msg = validate_draw_data(
                 draw_date, main_balls, powerball,
                 schema.get("num_main_balls", 5),
@@ -85,45 +84,102 @@ def fetch_and_parse_year(
         logger.error(f"Failed to process year {year}: {e}")
         return year, [], {"num_main_balls": 5, "num_power_balls": 1}, 0, url
 
-def main():
-    # Parse CLI Arguments
-    parser = argparse.ArgumentParser(description="SA National Lottery results extraction and multi-format dataset builder")
-    parser.add_argument("--start-year", "-s", type=int, default=2010, help="Start year for results retrieval (inclusive)")
-    parser.add_argument("--end-year", "-e", type=int, default=2026, help="End year for results retrieval (inclusive)")
-    parser.add_argument("--url-template", "-u", type=str, default=None, 
-                        help="Base archive URL template with {year} placeholder")
-    parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset file path (.txt, .csv, .json, .sqlite)")
-    parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra"], default=None, 
-                        help="Preset shortcut for URL template")
-    args = parser.parse_args()
+def run_interactive_wizard() -> Tuple[int, int, Optional[str], str, Optional[str]]:
+    """
+    Launches a clean, interactive terminal wizard to configure settings.
+    Returns: (start_year, end_year, url_template, output_path, game)
+    """
+    print("\n" + "="*50)
+    print("      ArcStractor Interactive Configuration Wizard")
+    print("="*50)
+    
+    # 1. Choose Game Preset
+    print("\nSelect Game Preset:")
+    print("  [1] PowerBall (Default)")
+    print("  [2] PowerBall Xtra")
+    choice = input("Enter choice (1-2) [1]: ").strip()
+    game = "powerball-xtra" if choice == "2" else "powerball"
+    
+    # 2. Year Range
+    current_year = date.today().year
+    print(f"\nEnter Year Range (available 2009-{current_year}):")
+    
+    start_input = input("Enter start year [2010]: ").strip()
+    start_year = int(start_input) if start_input.isdigit() else 2010
+    
+    end_input = input(f"Enter end year [{current_year}]: ").strip()
+    end_year = int(end_input) if end_input.isdigit() else current_year
+    
+    # 3. Output Path
+    default_output = "data/dataset_2.txt" if game == "powerball" else "data/dataset_xtra.txt"
+    print(f"\nEnter Output Destination (supported: .txt, .csv, .json, .db, .sqlite):")
+    output_path = input(f"Enter file path [{default_output}]: ").strip()
+    if not output_path:
+        output_path = default_output
+        
+    print("\n" + "-"*50)
+    print("Configuration Summary:")
+    print(f"  - Game Preset: {game.upper()}")
+    print(f"  - Year Range: {start_year} to {end_year}")
+    print(f"  - Output File: {output_path}")
+    print("-"*50)
+    
+    confirm = input("Proceed with extraction? (y/n) [y]: ").strip().lower()
+    if confirm == 'n':
+        print("Extraction canceled.")
+        sys.exit(0)
+        
+    url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive" if game == "powerball-xtra" else "https://za.national-lottery.com/powerball/results/{year}-archive"
+    return start_year, end_year, url_template, output_path, game
 
-    # Determine URL Template based on preset or custom value
-    url_template = args.url_template
-    if not url_template:
-        game = args.game or "powerball"
-        if game == "powerball-xtra":
-            url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
-        else:
-            url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+def main():
+    # Detect if we should launch the wizard:
+    # Trigger if no CLI args are passed AND standard input is an interactive terminal.
+    if len(sys.argv) == 1 and sys.stdin.isatty():
+        start_year, end_year, url_template, output_path, game = run_interactive_wizard()
+    else:
+        # Parse CLI Arguments
+        parser = argparse.ArgumentParser(description="SA National Lottery results extraction and multi-format dataset builder")
+        parser.add_argument("--start-year", "-s", type=int, default=2010, help="Start year for results retrieval (inclusive)")
+        parser.add_argument("--end-year", "-e", type=int, default=2026, help="End year for results retrieval (inclusive)")
+        parser.add_argument("--url-template", "-u", type=str, default=None, 
+                            help="Base archive URL template with {year} placeholder")
+        parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset file path (.txt, .csv, .json, .db, .sqlite)")
+        parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra"], default=None, 
+                            help="Preset shortcut for URL template")
+        args = parser.parse_args()
+
+        start_year = args.start_year
+        end_year = args.end_year
+        output_path = args.output
+        
+        # Determine URL Template based on preset or custom value
+        url_template = args.url_template
+        if not url_template:
+            game = args.game or "powerball"
+            if game == "powerball-xtra":
+                url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
+            else:
+                url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
 
     logger.info("Starting SA Lottery Draw Results Extraction process")
-    logger.info(f"Configuration: Start={args.start_year}, End={args.end_year}, Game URL template={url_template}, Output={args.output}")
+    logger.info(f"Configuration: Start={start_year}, End={end_year}, Game URL template={url_template}, Output={output_path}")
 
     # 1. Parse the existing dataset
-    dataset_exists = os.path.exists(args.output)
+    dataset_exists = os.path.exists(output_path)
     lines_to_keep = []
     last_completed_day = 0
-    last_completed_year = args.start_year - 1
+    last_completed_year = start_year - 1
 
     if dataset_exists:
         try:
-            lines_to_keep, last_completed_day, last_completed_year = parse_existing_dataset(args.output)
+            lines_to_keep, last_completed_day, last_completed_year = parse_existing_dataset(output_path)
             logger.info(f"Existing dataset parsed. Last completed Day {last_completed_day} in year {last_completed_year}")
         except IOError as e:
             logger.error(f"Failed to read existing dataset: {e}")
             sys.exit(1)
     else:
-        logger.info(f"Target dataset file {args.output} does not exist. A new file will be created.")
+        logger.info(f"Target dataset file {output_path} does not exist. A new file will be created.")
 
     # 2. Fetch and parse results in parallel using ThreadPoolExecutor
     all_new_draws = []
@@ -133,11 +189,11 @@ def main():
     years_processed = []
     detected_schema = {"num_main_balls": 5, "num_power_balls": 1}
 
-    logger.info(f"Initiating concurrent scrape for years {args.start_year} to {args.end_year}...")
+    logger.info(f"Initiating concurrent scrape for years {start_year} to {end_year}...")
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
             executor.submit(fetch_and_parse_year, year, url_template): year
-            for year in range(args.start_year, args.end_year + 1)
+            for year in range(start_year, end_year + 1)
         }
         
         for future in as_completed(futures):
@@ -150,13 +206,12 @@ def main():
                     all_new_draws.extend(year_draws)
                     total_validation_failures += val_fails
                     years_processed.append(yr)
-                    # Adopt the detected schema (assuming it remains consistent)
                     detected_schema = schema
             except Exception as exc:
                 logger.error(f"Thread execution error for year {year}: {exc}")
                 failed_urls.append(url_template.format(year=year))
 
-    # Sort years processed to ensure output presentation matches expectations
+    # Sort years processed
     years_processed.sort()
     # Sort the entire scraped list chronologically
     all_new_draws.sort(key=lambda x: x[0])
@@ -164,22 +219,18 @@ def main():
     # 3. Dynamic Cutoff Determination by matching the last completed draw numbers
     cutoff_date = None
     if lines_to_keep:
-        # Check type of records kept
         last_item = lines_to_keep[-1]
         last_main_balls = None
         last_powerball = None
         
         if isinstance(last_item, dict):
-            # For CSV, JSON, SQLite records
             last_main_balls = last_item.get("main_balls")
             last_powerball = last_item.get("powerball")
         else:
-            # For custom TXT string entries
             last_main_balls, last_powerball = get_last_completed_draw_balls(last_item)
             
         if last_main_balls and last_powerball is not None:
             logger.info(f"Searching for match of last completed draw: {last_main_balls} [{last_powerball}]")
-            # Look for this draw in our scraped draws
             for i, (draw_date, main_balls, powerball) in enumerate(all_new_draws):
                 if main_balls == last_main_balls and powerball == last_powerball:
                     cutoff_date = draw_date
@@ -207,11 +258,10 @@ def main():
     
     # 4. Create a backup of the existing file if it exists
     if dataset_exists:
-        backup_path = args.output + ".bak"
+        backup_path = output_path + ".bak"
         try:
-            logger.info(f"Creating backup of {args.output} at {backup_path}")
-            # If database/sqlite, handle file copy safely
-            shutil.copy2(args.output, backup_path)
+            logger.info(f"Creating backup of {output_path} at {backup_path}")
+            shutil.copy2(output_path, backup_path)
         except IOError as e:
             logger.error(f"Failed to create backup file: {e}. Aborting write.")
             sys.exit(1)
@@ -220,25 +270,24 @@ def main():
     appended_count = 0
     if unique_draws:
         try:
-            # Ensure parent directories exist
-            out_dir = os.path.dirname(args.output)
+            out_dir = os.path.dirname(output_path)
             if out_dir:
                 os.makedirs(out_dir, exist_ok=True)
                 
             appended_count = append_new_results(
-                args.output,
+                output_path,
                 unique_draws,
                 last_completed_day,
                 last_completed_year,
                 lines_to_keep
             )
-            logger.info(f"Successfully appended {appended_count} records to {args.output}")
+            logger.info(f"Successfully appended {appended_count} records to {output_path}")
         except IOError as e:
             logger.error(f"Failed to write results to dataset: {e}.")
             if dataset_exists:
                 logger.info("Restoring backup...")
                 try:
-                    shutil.copy2(backup_path, args.output)
+                    shutil.copy2(backup_path, output_path)
                     logger.info("Backup successfully restored.")
                 except IOError as restore_err:
                     logger.critical(f"Failed to restore backup: {restore_err}. Source dataset may be corrupted!")
@@ -250,7 +299,7 @@ def main():
     print("\n" + "="*40)
     print("EXTRACTION SUMMARY")
     print("="*40)
-    print(f"Output File: {args.output}")
+    print(f"Output File: {output_path}")
     print(f"Years processed: {years_processed}")
     print(f"Number of records added: {appended_count}")
     print(f"Number of duplicates skipped: {skipped_duplicates}")

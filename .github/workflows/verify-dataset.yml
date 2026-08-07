@@ -1,0 +1,47 @@
+name: Verify Dataset Health
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'data/**'
+      - 'src/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'data/**'
+      - 'src/**'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Verify PowerBall Dataset (dataset_2.txt)
+      run: |
+        if [ -f "data/dataset_2.txt" ]; then
+          python src/verify.py data/dataset_2.txt
+        else
+          echo "PowerBall dataset not found, skipping."
+        fi
+
+    - name: Verify PowerBall Xtra Dataset (dataset_xtra.txt)
+      run: |
+        if [ -f "data/dataset_xtra.txt" ]; then
+          python src/verify.py data/dataset_xtra.txt
+        else
+          echo "PowerBall Xtra dataset not found, skipping."
+        fi
