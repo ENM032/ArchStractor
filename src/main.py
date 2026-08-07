@@ -2,7 +2,10 @@ import sys
 import os
 import shutil
 import logging
+import argparse
+import re
 from datetime import date
+from typing import List, Tuple, Optional
 from scraper import fetch_page
 from parser import parse_html_page
 from formatter import parse_existing_dataset, append_new_results
@@ -21,37 +24,76 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DATASET_PATH = "data/dataset_2.txt"
-BACKUP_PATH = "data/dataset_2.txt.bak"
+def get_last_completed_draw_balls(last_line: str) -> Tuple[Optional[List[int]], Optional[int]]:
+    """
+    Parses the ball numbers from the last completed draw line in dataset.
+    Example: "Day 21 - [1,8,31,43,44,[11]]" -> ([1, 8, 31, 43, 44], 11)
+    """
+    match = re.match(r"^Day\s+\d+\s+-\s+\[(\d+(?:,\d+)*,\[\d+\])\]$", last_line)
+    if not match:
+        return None, None
+    inner = match.group(1)
+    parts = re.split(r",?\[", inner)
+    if len(parts) < 2:
+        return None, None
+    main_nums_str = parts[0].rstrip(",")
+    pb_str = parts[1].rstrip("]")
+    try:
+        main_nums = [int(x) for x in main_nums_str.split(",")]
+        pb = int(pb_str)
+        return main_nums, pb
+    except ValueError:
+        return None, None
 
 def main():
+    # Parse CLI Arguments
+    parser = argparse.ArgumentParser(description="SA National Lottery PowerBall results extraction and dataset building tool")
+    parser.add_argument("--start-year", "-s", type=int, default=2010, help="Start year for results retrieval (inclusive)")
+    parser.add_argument("--end-year", "-e", type=int, default=2026, help="End year for results retrieval (inclusive)")
+    parser.add_argument("--url-template", "-u", type=str, default=None, 
+                        help="Base archive URL template with {year} placeholder")
+    parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset text file path")
+    parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra"], default=None, 
+                        help="Preset shortcut for URL template")
+    args = parser.parse_args()
+
+    # Determine URL Template based on preset or custom value
+    url_template = args.url_template
+    if not url_template:
+        game = args.game or "powerball"
+        if game == "powerball-xtra":
+            url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
+        else:
+            url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+
     logger.info("Starting SA PowerBall Draw Results Extraction process")
-    
+    logger.info(f"Configuration: Start={args.start_year}, End={args.end_year}, Game URL template={url_template}, Output={args.output}")
+
     # 1. Parse the existing dataset
-    if not os.path.exists(DATASET_PATH):
-        logger.error(f"Dataset file not found at {DATASET_PATH}. Cannot continue.")
-        sys.exit(1)
-        
-    try:
-        lines_to_keep, last_completed_day, last_completed_year = parse_existing_dataset(DATASET_PATH)
-        logger.info(f"Existing dataset parsed. Last completed Day {last_completed_day} in year {last_completed_year}")
-    except IOError as e:
-        logger.error(f"Failed to read existing dataset: {e}")
-        sys.exit(1)
-        
-    # The last completed day in 2010 is Day 21, which is 2010-01-05.
-    # Any draws on or before 2010-01-05 should be skipped as duplicates.
-    cutoff_date = date(2010, 1, 5)
-    
-    # 2. Fetch and parse results for each year from 2010 to 2026
+    dataset_exists = os.path.exists(args.output)
+    lines_to_keep = []
+    last_completed_day = 0
+    last_completed_year = args.start_year - 1
+
+    if dataset_exists:
+        try:
+            lines_to_keep, last_completed_day, last_completed_year = parse_existing_dataset(args.output)
+            logger.info(f"Existing dataset parsed. Last completed Day {last_completed_day} in year {last_completed_year}")
+        except IOError as e:
+            logger.error(f"Failed to read existing dataset: {e}")
+            sys.exit(1)
+    else:
+        logger.info(f"Target dataset file {args.output} does not exist. A new file will be created.")
+
+    # 2. Fetch and parse results for each year in the range
     all_new_draws = []
     failed_urls = []
     skipped_duplicates = 0
     validation_failures = 0
     years_processed = []
-    
-    for year in range(2010, 2027):
-        url = f"https://za.national-lottery.com/powerball/results/{year}-archive"
+
+    for year in range(args.start_year, args.end_year + 1):
+        url = url_template.format(year=year)
         try:
             html = fetch_page(url, retries=1)
             draws = parse_html_page(html)
@@ -69,29 +111,43 @@ def main():
                     validation_failures += 1
                     continue
                 
-                # Check for duplicates (on or before cutoff date)
-                if draw_date <= cutoff_date:
-                    skipped_duplicates += 1
-                    continue
-                
                 year_new_draws.append((draw_date, main_balls, powerball))
                 
             all_new_draws.extend(year_new_draws)
             years_processed.append(year)
-            logger.info(f"Year {year}: added {len(year_new_draws)} new draws")
+            logger.info(f"Year {year}: processed {len(year_new_draws)} valid draws")
             
         except Exception as e:
             logger.error(f"Failed to process year {year}: {e}")
             failed_urls.append(url)
             
-    # 3. Verify chronological order and uniqueness of the entire new dataset
+    # Sort the entire scraped list chronologically
     all_new_draws.sort(key=lambda x: x[0])
-    
-    # Check for duplicate dates in the scraped data
+
+    # 3. Dynamic Cutoff Determination by matching the last completed draw numbers
+    cutoff_date = None
+    if lines_to_keep:
+        last_line = lines_to_keep[-1]
+        last_main_balls, last_powerball = get_last_completed_draw_balls(last_line)
+        if last_main_balls and last_powerball is not None:
+            logger.info(f"Searching for match of last completed draw: {last_main_balls} [{last_powerball}]")
+            # Look for this draw in our scraped draws
+            for i, (draw_date, main_balls, powerball) in enumerate(all_new_draws):
+                if main_balls == last_main_balls and powerball == last_powerball:
+                    cutoff_date = draw_date
+                    logger.info(f"Match found! Cutoff date set to {cutoff_date}")
+                    break
+            if not cutoff_date:
+                logger.warning("Could not find a match for the last completed draw numbers in the scraped results. No entries will be skipped.")
+
+    # Filter out duplicates (on or before cutoff date)
     unique_draws = []
     seen_dates = set()
     for item in all_new_draws:
         d_date = item[0]
+        if cutoff_date and d_date <= cutoff_date:
+            skipped_duplicates += 1
+            continue
         if d_date in seen_dates:
             logger.warning(f"Duplicate date detected in scraped results: {d_date}. Skipping.")
             skipped_duplicates += 1
@@ -99,35 +155,44 @@ def main():
         seen_dates.add(d_date)
         unique_draws.append(item)
         
-    logger.info(f"Total new draws to append after validation: {len(unique_draws)}")
+    logger.info(f"Total new draws to append after validation and duplication checks: {len(unique_draws)}")
     
-    # 4. Create a backup of the existing file before modifying it
-    try:
-        logger.info(f"Creating backup of {DATASET_PATH} at {BACKUP_PATH}")
-        shutil.copy2(DATASET_PATH, BACKUP_PATH)
-    except IOError as e:
-        logger.error(f"Failed to create backup file: {e}. Aborting write.")
-        sys.exit(1)
+    # 4. Create a backup of the existing file if it exists
+    if dataset_exists:
+        backup_path = args.output + ".bak"
+        try:
+            logger.info(f"Creating backup of {args.output} at {backup_path}")
+            shutil.copy2(args.output, backup_path)
+        except IOError as e:
+            logger.error(f"Failed to create backup file: {e}. Aborting write.")
+            sys.exit(1)
         
     # 5. Append the results to the dataset file
     appended_count = 0
     if unique_draws:
         try:
+            # Ensure parent directories exist
+            out_dir = os.path.dirname(args.output)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+                
             appended_count = append_new_results(
-                DATASET_PATH,
+                args.output,
                 unique_draws,
                 last_completed_day,
                 last_completed_year,
                 lines_to_keep
             )
-            logger.info(f"Successfully appended {appended_count} records to {DATASET_PATH}")
+            logger.info(f"Successfully appended {appended_count} records to {args.output}")
         except IOError as e:
-            logger.error(f"Failed to write results to dataset: {e}. Restoring backup...")
-            try:
-                shutil.copy2(BACKUP_PATH, DATASET_PATH)
-                logger.info("Backup successfully restored.")
-            except IOError as restore_err:
-                logger.critical(f"Failed to restore backup: {restore_err}. Source dataset may be corrupted!")
+            logger.error(f"Failed to write results to dataset: {e}.")
+            if dataset_exists:
+                logger.info("Restoring backup...")
+                try:
+                    shutil.copy2(backup_path, args.output)
+                    logger.info("Backup successfully restored.")
+                except IOError as restore_err:
+                    logger.critical(f"Failed to restore backup: {restore_err}. Source dataset may be corrupted!")
             sys.exit(1)
     else:
         logger.info("No new draw records to append.")
@@ -136,6 +201,7 @@ def main():
     print("\n" + "="*40)
     print("EXTRACTION SUMMARY")
     print("="*40)
+    print(f"Output File: {args.output}")
     print(f"Years processed: {years_processed}")
     print(f"Number of records added: {appended_count}")
     print(f"Number of duplicates skipped: {skipped_duplicates}")

@@ -68,7 +68,11 @@ def parse_html_page(html_content: str) -> List[Tuple[datetime.date, List[int], i
     sorted from newest to oldest (as they appear in the HTML table).
     """
     soup = BeautifulSoup(html_content, 'html.parser')
-    table = soup.find('table', class_='powerball')
+    # Match tables with any of the lottery class indicators, or fall back to the first table
+    table = soup.find('table', class_=lambda c: c and any(cls in c for cls in ['powerball', 'powerball-plus', 'powerball-xtra', 'mobResult']))
+    if not table:
+        table = soup.find('table')
+        
     if not table:
         return []
         
