@@ -11,3 +11,6 @@ __pycache__/
 
 # Ignore local extraction log
 extraction.log
+
+# Ignore local HTML cache directory
+.cache/

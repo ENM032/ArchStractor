@@ -6,6 +6,7 @@ import argparse
 import re
 from datetime import date
 from typing import List, Tuple, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper import fetch_page
 from parser import parse_html_page
 from formatter import parse_existing_dataset, append_new_results
@@ -44,6 +45,38 @@ def get_last_completed_draw_balls(last_line: str) -> Tuple[Optional[List[int]], 
         return main_nums, pb
     except ValueError:
         return None, None
+
+def fetch_and_parse_year(year: int, url_template: str) -> Tuple[int, List[Tuple[date, List[int], int]], int, Optional[str]]:
+    """
+    Fetches and parses SA lottery results for a single year.
+    Returns: (year, valid_draws, validation_failures, error_url)
+    """
+    url = url_template.format(year=year)
+    validation_fails = 0
+    try:
+        html = fetch_page(url, retries=1)
+        draws = parse_html_page(html)
+        logger.info(f"Year {year}: parsed {len(draws)} draws from webpage")
+        
+        # Sort chronologically (oldest to newest)
+        draws.sort(key=lambda x: x[0])
+        
+        year_new_draws = []
+        for draw_date, main_balls, powerball in draws:
+            # Use validator to check data correctness
+            is_valid, err_msg = validate_draw_data(draw_date, main_balls, powerball)
+            if not is_valid:
+                logger.warning(f"Validation failure for draw in year {year}: {err_msg}")
+                validation_fails += 1
+                continue
+            
+            year_new_draws.append((draw_date, main_balls, powerball))
+            
+        return year, year_new_draws, validation_fails, None
+        
+    except Exception as e:
+        logger.error(f"Failed to process year {year}: {e}")
+        return year, [], 0, url
 
 def main():
     # Parse CLI Arguments
@@ -85,42 +118,36 @@ def main():
     else:
         logger.info(f"Target dataset file {args.output} does not exist. A new file will be created.")
 
-    # 2. Fetch and parse results for each year in the range
+    # 2. Fetch and parse results in parallel using ThreadPoolExecutor
     all_new_draws = []
     failed_urls = []
     skipped_duplicates = 0
-    validation_failures = 0
+    total_validation_failures = 0
     years_processed = []
 
-    for year in range(args.start_year, args.end_year + 1):
-        url = url_template.format(year=year)
-        try:
-            html = fetch_page(url, retries=1)
-            draws = parse_html_page(html)
-            logger.info(f"Year {year}: parsed {len(draws)} draws from webpage")
-            
-            # Sort chronologically (oldest to newest)
-            draws.sort(key=lambda x: x[0])
-            
-            year_new_draws = []
-            for draw_date, main_balls, powerball in draws:
-                # Use validator to check data correctness
-                is_valid, err_msg = validate_draw_data(draw_date, main_balls, powerball)
-                if not is_valid:
-                    logger.warning(f"Validation failure for draw in year {year}: {err_msg}")
-                    validation_failures += 1
-                    continue
-                
-                year_new_draws.append((draw_date, main_balls, powerball))
-                
-            all_new_draws.extend(year_new_draws)
-            years_processed.append(year)
-            logger.info(f"Year {year}: processed {len(year_new_draws)} valid draws")
-            
-        except Exception as e:
-            logger.error(f"Failed to process year {year}: {e}")
-            failed_urls.append(url)
-            
+    logger.info(f"Initiating concurrent scrape for years {args.start_year} to {args.end_year}...")
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(fetch_and_parse_year, year, url_template): year
+            for year in range(args.start_year, args.end_year + 1)
+        }
+        
+        for future in as_completed(futures):
+            year = futures[future]
+            try:
+                yr, year_draws, val_fails, err_url = future.result()
+                if err_url:
+                    failed_urls.append(err_url)
+                else:
+                    all_new_draws.extend(year_draws)
+                    total_validation_failures += val_fails
+                    years_processed.append(yr)
+            except Exception as exc:
+                logger.error(f"Thread execution error for year {year}: {exc}")
+                failed_urls.append(url_template.format(year=year))
+
+    # Sort years processed to ensure output presentation matches expectations
+    years_processed.sort()
     # Sort the entire scraped list chronologically
     all_new_draws.sort(key=lambda x: x[0])
 
@@ -205,7 +232,7 @@ def main():
     print(f"Years processed: {years_processed}")
     print(f"Number of records added: {appended_count}")
     print(f"Number of duplicates skipped: {skipped_duplicates}")
-    print(f"Number of validation failures: {validation_failures}")
+    print(f"Number of validation failures: {total_validation_failures}")
     if failed_urls:
         print(f"Failed URLs: {failed_urls}")
     else:
