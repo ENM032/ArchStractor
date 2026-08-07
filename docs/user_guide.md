@@ -1,6 +1,6 @@
 # ArcStractor User Guide
 
-Welcome to the **ArcStractor** User Guide! This document is designed for average users who want to run the PowerBall extraction tool to collect and update South African lottery draws. No coding experience is required—we will take you through the entire flow step-by-step.
+Welcome to the **ArcStractor** User Guide! This document is designed for average users who want to run the PowerBall and Lotto extraction tool to collect and update South African lottery draws. No coding experience is required—we will take you through the entire flow step-by-step.
 
 ---
 
@@ -17,7 +17,7 @@ Welcome to the **ArcStractor** User Guide! This document is designed for average
 ---
 
 ## 1. What is ArcStractor?
-ArcStractor is a simple command-line tool that fetches historical South African National Lottery results from the web (specifically PowerBall and PowerBall Xtra archives), validates that the results are correct, and saves them into a file. 
+ArcStractor is a simple command-line tool that fetches historical South African National Lottery results from the web (PowerBall, PowerBall Xtra, and Lotto archives), validates that the results are correct, and saves them into a file. 
 
 If the target file already contains data, the tool is smart enough to start exactly where the existing data stops without introducing duplicate draws.
 
@@ -67,19 +67,33 @@ If you run the script with **no arguments** in an interactive terminal, ArcStrac
 python src/main.py
 ```
 
-Follow the prompts on your screen and press `Enter` to accept defaults.
+Follow the prompts on your screen and press `Enter` to accept defaults. The wizard supports:
+1. **PowerBall** (Default)
+2. **PowerBall Xtra**
+3. **Lotto**
 
 ### Option B: Direct Command Line (Advanced)
 If you want to bypass the prompt wizard and run it directly with custom flags, append options like so:
 
+**For Standard PowerBall**:
+```bash
+python src/main.py --game powerball --start-year 2010 --end-year 2026 --output data/dataset_2.txt
+```
+
+**For PowerBall Xtra**:
 ```bash
 python src/main.py --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.csv
+```
+
+**For Standard Lotto**:
+```bash
+python src/main.py --game lotto --start-year 2010 --end-year 2026 --output data/dataset_lotto.txt
 ```
 
 **Command Options Reference**:
 - `--start-year` (or `-s`): The first year to retrieve (e.g., `2018`).
 - `--end-year` (or `-e`): The last year to retrieve (e.g., `2026`).
-- `--game` (or `-g`): Choose between `powerball` or `powerball-xtra`.
+- `--game` (or `-g`): Choose between `powerball`, `powerball-xtra`, or `lotto`.
 - `--output` (or `-o`): The path where the file will be saved. The extension of this file (`.txt`, `.csv`, `.json`, `.db`, `.sqlite`) determines its output format!
 
 ---
@@ -100,10 +114,10 @@ To launch the interactive configuration prompt inside the container:
 docker-compose run extractor
 ```
 
-### 3. Run with Arguments in Docker
+### 3. Run with Arguments in Docker (Lotto example)
 To run direct commands through Docker:
 ```bash
-docker-compose run extractor --game powerball-xtra --start-year 2015 --end-year 2026 --output data/dataset_xtra.csv
+docker-compose run extractor --game lotto --start-year 2010 --end-year 2026 --output data/dataset_lotto.txt
 ```
 
 All datasets generated inside Docker are saved directly to your local computer's `data/` folder (and caching is preserved inside `.cache/`) because volumes are mapped automatically.
@@ -114,8 +128,8 @@ All datasets generated inside Docker are saved directly to your local computer's
 
 ArcStractor automatically determines how to read and write your data based on your file path extension:
 
-- **Custom Text (`.txt`)**: Stores draws in the format `Day X - [N1,N2,N3,N4,N5,[PB]]` grouped under yearly headers.
-- **CSV (`.csv`)**: Stores draws in spreadsheet layout with columns: `day,date,ball_1,ball_2,ball_3,ball_4,ball_5,powerball`.
+- **Custom Text (`.txt`)**: Stores draws in the format `Day X - [N1,N2,N3,N4,N5,[PB]]` (or `[N1,N2,N3,N4,N5,N6,[Bonus]]` for Lotto) grouped under yearly headers.
+- **CSV (`.csv`)**: Stores draws in spreadsheet layout with columns: `day,date,ball_1,ball_2,ball_3,ball_4,ball_5,powerball` (automatically adds `ball_6` if Lotto is detected).
 - **JSON (`.json`)**: Stores draws as an array of JSON objects containing keys for `day`, `date`, `main_balls`, and `powerball`.
 - **SQLite Database (`.db` or `.sqlite`)**: Stores draws inside a SQL table named `draw_results`, making it ready for database querying.
 
@@ -131,9 +145,9 @@ python src/verify.py
 ```
 *(By default, this checks the main `data/dataset_2.txt` file).*
 
-If you want to verify a custom output file instead (like `data/dataset_xtra.csv` or `data/dataset_xtra.db`), type:
+If you want to verify a custom output file instead (like `data/dataset_lotto.txt` or `data/dataset_xtra.csv`), type:
 ```bash
-python src/verify.py data/dataset_xtra.csv
+python src/verify.py data/dataset_lotto.txt
 ```
 
 If everything is healthy, you will see this success message:

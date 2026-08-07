@@ -45,3 +45,11 @@ jobs:
         else
           echo "PowerBall Xtra dataset not found, skipping."
         fi
+
+    - name: Verify Lotto Dataset (dataset_lotto.txt)
+      run: |
+        if [ -f "data/dataset_lotto.txt" ]; then
+          python src/verify.py data/dataset_lotto.txt
+        else
+          echo "Lotto dataset not found, skipping."
+        fi
