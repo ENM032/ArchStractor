@@ -19,19 +19,19 @@ sequenceDiagram
 
     User/CLI->>Main: Execute with arguments
     Main->>Formatter: parse_existing_dataset(output_path)
-    Formatter-->>Main: Return (lines_to_keep, last_completed_day, last_completed_year)
+    Formatter-->>Main: Return (existing_data, last_completed_day, last_completed_year)
     
     loop For each year in range
         Main->>Scraper: fetch_page(year_url)
         Scraper-->>Main: Return HTML content
         Main->>Parser: parse_html_page(html)
-        Parser-->>Main: Return list of draws (date, main_balls, powerball)
+        Parser-->>Main: Return (draws, detected_schema)
     end
     
     Main->>Main: Sort scraped draws chronologically
     
     loop Validate each scraped draw
-        Main->>Validator: validate_draw_data(date, main, pb)
+        Main->>Validator: validate_draw_data(date, main, pb, schema_main, schema_pb)
         Validator-->>Main: Return (is_valid, error_message)
     end
     
@@ -39,7 +39,7 @@ sequenceDiagram
     Main->>Main: Create backup dataset file (.bak)
     
     Main->>Formatter: append_new_results(output_path, new_draws, ...)
-    Formatter-->>Main: Write file, return appended_count
+    Formatter-->>Main: Write file (TXT/CSV/JSON/SQLite), return appended_count
     Main->>User/CLI: Print execution summary
 ```
 
@@ -53,42 +53,44 @@ sequenceDiagram
   - Implements customized request headers containing a generic browser `User-Agent` to avoid anti-scraping blocks.
   - Implements connection timeout handling (15 seconds).
   - Supports automated single retry logic: if a request fails or returns a non-200 HTTP code, it waits 2 seconds and attempts retrieval once more before raising an exception.
+  - **Local HTML Caching**: Saves parsed HTML files to a local `.cache/` folder for all historical years (`year < current_year`). On subsequent runs, it loads from cache instead of hitting the network. The current year is always fetched live.
 
 ### `src/parser.py`
-- **Purpose**: Extracts draw elements (Dates, Main numbers, and PowerBall numbers) from the raw HTML structure.
+- **Purpose**: Extracts draw elements (Dates, Main numbers, and PowerBall numbers) and detects game schemas.
 - **Key Features**:
   - Employs `BeautifulSoup` to parse HTML. It matches the results table using a flexible selector that targets classes like `powerball`, `powerball-plus`, `powerball-xtra`, or `mobResult`. If all else fails, it targets the first table.
   - Utilizes a robust date extractor (`parse_date`) that attempts to regex-match the `{day}-{month}-{year}` pattern inside the row's `href` URL structure first. If missing, it falls back to parsing string structures in the date cell, splitting out weekdays and month names safely.
+  - **Dynamic Schema Detection**: Parses list item classes inside `ul.balls` to identify bonus/powerball indicators (e.g. classes containing `powerball`, `bonus`, `bonusball`, `supp`) vs. normal numbers. It returns the detected schema (number of main balls, number of powerballs) on-the-fly, avoiding hardcoding the number layout.
 
 ### `src/validator.py`
 - **Purpose**: The central gatekeeper enforcing data formatting and mathematical constraints for draw results.
 - **Enforced Rules**:
   - **Date Validation**: The draw date must exist and must not be in the future (greater than the machine's local date).
-  - **Ball Counts**: Each draw must contain exactly 5 main numbers and exactly 1 PowerBall number.
-  - **Numerical Ranges**: Main numbers must fall within the range `[1, 50]` (covers both historical `1-45` and modern `1-50` pools). The PowerBall must fall within the range `[1, 20]` (covers historical `1-20` and modern `1-16` pools).
-  - **Uniqueness Check**: The 5 main numbers must contain no duplicate values.
+  - **Ball Counts**: Each draw must contain exactly the expected count of main and PowerBall numbers as declared by the page's schema.
+  - **Numerical Ranges**: Main numbers must fall within the range `[1, 50]`. The PowerBall must fall within the range `[1, 20]`.
+  - **Uniqueness Check**: The main numbers list must contain no duplicate values.
 
 ### `src/formatter.py`
-- **Purpose**: Reads existing text data, manages sequencing indices, formats rows, and appends output.
-- **Key Features**:
-  - Auto-detects target file line endings (`\r\n` for CRLF or `\n` for LF) so that appends do not corrupt file encoding structure.
-  - Formats entries in the native schema: `Day X - [N1,N2,N3,N4,N5,[PB]]` with zero internal whitespace.
-  - Automatically handles year headers: when a draw's year transitions, it injects a header line formatted as `=== {YEAR} ===`.
+- **Purpose**: Multi-format handler reading and writing files according to their file extension.
+- **Supported Formats**:
+  - **Custom Text (`.txt`)**: Stores data in `Day X - [N1,N2,N3,N4,N5,[PB]]` with `=== YEAR ===` rollover headers.
+  - **CSV (`.csv`)**: Reads and writes standard CSV layout dynamically based on the schema (e.g. `day,date,ball_1,ball_2,ball_3,ball_4,ball_5,powerball`).
+  - **JSON (`.json`)**: Reads and writes standard formatted JSON arrays of objects containing `day`, `date`, `main_balls`, and `powerball` keys.
+  - **SQLite Database (`.db` / `.sqlite`)**: Manages local database tables inside SQLite. Creates/appends rows inside the `draw_results` table.
+- **Line Ending Preservation**: Detects line endings (`\r\n` vs `\n`) for TXT/CSV files to prevent encoding corruption.
 
 ### `src/main.py`
 - **Purpose**: The main orchestration script. It parses terminal options, manages safety backups, computes cutoff offsets, and manages logs.
 - **Dynamic Cutoff Logic**:
-  Instead of hardcoding a date threshold, `main.py` parses the ball values of the very last completed entry in the text file. It then runs a chronological search through the newly scraped entries. Once it finds an entry with identical ball values, it sets that date as the `cutoff_date`. All scraped draws on or before this date are safely ignored. This permits seamless incremental updates.
+  Instead of hardcoding a date threshold, `main.py` parses the ball values of the very last completed entry in the target file (supports both string extraction for TXT, and dictionary inspection for CSV/JSON/SQLite). It then runs a chronological search through the newly scraped entries. Once it finds an entry with identical ball values, it sets that date as the `cutoff_date`. All scraped draws on or before this date are safely ignored.
 - **Atomic File Backups**:
   Before calling the write module, `main.py` copies the target file to `{filename}.bak`. If the write fails due to disk operations (`IOError`), it attempts to restore the backup file, preventing data corruption.
 
 ### `src/verify.py`
 - **Purpose**: An offline verification script to test dataset integrity.
-- **Validated Items**:
-  - Strict sequence checks: Every draw must follow index `Day X + 1` from the previous line.
-  - Structural formats: Confirms brackets matching (`Day X - [N1,N2,N3,N4,N5,[PB]]`).
-  - Calls `validator.validate_draw_data` on every record in the dataset to confirm that values fall within acceptable pools.
-  - Confirms year headings are in strictly increasing order.
+- **Key Features**:
+  - **Auto-Format Detection**: Checks file extension to choose either raw line parsing (for TXT files) or structured record verification (for CSV, JSON, and SQLite).
+  - **Sequence Validation**: Confirms that day indexes are strictly sequential (incrementing by 1), year timelines are ascending, and calls the central `validator.py` constraints on each draw.
 
 ---
 
@@ -105,4 +107,4 @@ To add a new preset game shortcut (like standard `lotto`):
    if game == "lotto":
        url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
    ```
-3. Update `src/validator.py` if the game's ball ranges differ from PowerBall's matrix (for example, standard Lotto draws 6 balls out of 52 and has no PowerBall).
+3. The parser will automatically adapt to standard Lotto's schema (`6 main, 1 bonusball`) on-the-fly due to the dynamic schema detector!
