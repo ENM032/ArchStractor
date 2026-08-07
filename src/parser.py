@@ -1,9 +1,8 @@
 import re
 from datetime import datetime
 from bs4 import BeautifulSoup
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 
-# List of month names in English to help with parsing
 MONTHS = ["january", "february", "march", "april", "may", "june", 
           "july", "august", "september", "october", "november", "december"]
 
@@ -14,12 +13,6 @@ def clean_whitespace(text: str) -> str:
 def parse_date(date_cell_text: str, href: Optional[str] = None) -> datetime.date:
     """
     Parses date from the cell text or href link.
-    Examples of date_cell_text:
-        - "Friday 31 December 2010"
-        - "Friday31 December 2010"
-        - "31 December 2010"
-    Examples of href:
-        - "/powerball/results/31-december-2010"
     """
     # 1. Try parsing from href if available
     if href:
@@ -34,13 +27,9 @@ def parse_date(date_cell_text: str, href: Optional[str] = None) -> datetime.date
 
     # 2. Try parsing from the cell text
     cleaned = clean_whitespace(date_cell_text)
-    # Remove weekday if it's at the beginning (e.g. "Friday", "Tuesday", etc.)
-    # We can match patterns like "31 December 2010" or "Friday 31 December 2010"
-    # Also handle "Friday31 December 2010" by separating letters and numbers
     cleaned_split = re.sub(r"([a-zA-Z]+)(\d+)", r"\1 \2", cleaned)
     parts = cleaned_split.split()
     
-    # We expect to find a day (1-31), a month (name), and a year (4 digits)
     day = None
     month_val = None
     year = None
@@ -61,23 +50,59 @@ def parse_date(date_cell_text: str, href: Optional[str] = None) -> datetime.date
         
     raise ValueError(f"Could not parse date from text: '{date_cell_text}' or href: '{href}'")
 
-def parse_html_page(html_content: str) -> List[Tuple[datetime.date, List[int], int]]:
+def detect_draw_schema(ball_lis: List[Any]) -> Tuple[int, int]:
+    """
+    Detects schema dynamically from list of ball elements.
+    Returns: (num_main_balls, num_power_balls)
+    """
+    num_main = 0
+    num_power = 0
+    
+    for li in ball_lis:
+        classes = li.get('class', [])
+        classes_str = " ".join(classes).lower()
+        # Check for PowerBall or bonus ball tags (avoiding "pb" since main balls have "pb" class)
+        if any(x in classes_str for x in ['powerball', 'bonus', 'bonusball', 'supp']):
+            num_power += 1
+        elif 'ball' in classes_str:
+            num_main += 1
+        else:
+            num_main += 1
+            
+    # Fallback to counts if class names didn't distinguish them
+    if num_power == 0 and len(ball_lis) > 0:
+        if len(ball_lis) == 6:
+            num_main = 5
+            num_power = 1
+        elif len(ball_lis) == 7:
+            num_main = 6
+            num_power = 1
+        else:
+            num_main = len(ball_lis) - 1
+            num_power = 1
+            
+    return num_main, num_power
+
+def parse_html_page(html_content: str) -> Tuple[List[Tuple[datetime.date, List[int], int]], Dict[str, int]]:
     """
     Parses the PowerBall results from the HTML content.
-    Returns a list of tuples: (draw_date, main_balls, powerball)
-    sorted from newest to oldest (as they appear in the HTML table).
+    Returns a tuple: (results_list, schema_dict)
+    where results_list is sorted from newest to oldest.
     """
     soup = BeautifulSoup(html_content, 'html.parser')
+    
     # Match tables with any of the lottery class indicators, or fall back to the first table
     table = soup.find('table', class_=lambda c: c and any(cls in c for cls in ['powerball', 'powerball-plus', 'powerball-xtra', 'mobResult']))
     if not table:
         table = soup.find('table')
         
     if not table:
-        return []
+        return [], {"num_main_balls": 5, "num_power_balls": 1}
         
     rows = table.find_all('tr')
     results = []
+    detected_schema = {"num_main_balls": 5, "num_power_balls": 1}
+    schema_detected = False
     
     for row in rows:
         cells = row.find_all('td')
@@ -92,8 +117,7 @@ def parse_html_page(html_content: str) -> List[Tuple[datetime.date, List[int], i
         
         try:
             draw_date = parse_date(date_text, href)
-        except ValueError as e:
-            # Skip rows where date is not parseable
+        except ValueError:
             continue
             
         # Balls cell parsing
@@ -102,16 +126,27 @@ def parse_html_page(html_content: str) -> List[Tuple[datetime.date, List[int], i
             continue
             
         ball_lis = balls_ul.find_all('li')
-        if len(ball_lis) < 6:
+        if len(ball_lis) < 2:
             continue
+            
+        # Dynamic schema detection from the first parseable draw
+        if not schema_detected:
+            num_main, num_power = detect_draw_schema(ball_lis)
+            detected_schema = {"num_main_balls": num_main, "num_power_balls": num_power}
+            schema_detected = True
             
         try:
-            # First 5 are main balls, 6th is PowerBall
-            main_balls = [int(li.text.strip()) for li in ball_lis[:5]]
-            powerball = int(ball_lis[5].text.strip())
+            main_count = detected_schema["num_main_balls"]
+            power_count = detected_schema["num_power_balls"]
+            
+            if len(ball_lis) < main_count + power_count:
+                continue
+                
+            main_balls = [int(li.text.strip()) for li in ball_lis[:main_count]]
+            # Support single Powerball extraction or raise warning if multiple
+            powerball = int(ball_lis[main_count].text.strip())
             results.append((draw_date, main_balls, powerball))
         except ValueError:
-            # Skip if any ball value is not an integer
             continue
             
-    return results
+    return results, detected_schema

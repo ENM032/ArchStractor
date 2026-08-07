@@ -2,27 +2,15 @@ import re
 import os
 import sys
 from datetime import date
+from typing import Tuple
 from validator import validate_draw_data
+from formatter import parse_existing_dataset, get_file_format
 
 HEADER_re = re.compile(r"^===\s+(\d{4})\s+===$")
 COMPLETED_re = re.compile(r"^Day\s+(\d+)\s+-\s+\[(\d+(?:,\d+)*,\[\d+\])\]$")
 PLACEHOLDER_re = re.compile(r"^Day\s+(\d+)\s+-\s+\[\]$")
 
-def verify_dataset(file_path: str) -> bool:
-    if not os.path.exists(file_path):
-        print(f"Error: Dataset file not found at {file_path}")
-        return False
-        
-    print(f"Verifying dataset health: {file_path}")
-    
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = [line.rstrip("\r\n") for line in f]
-    except IOError as e:
-        print(f"Error reading dataset file: {e}")
-        return False
-        
-    errors = []
+def verify_txt_dataset(lines: list, errors: list) -> Tuple[int, int, list]:
     current_year = None
     expected_day = 1
     total_completed = 0
@@ -30,7 +18,6 @@ def verify_dataset(file_path: str) -> bool:
     years_seen = []
     
     for line_num, line in enumerate(lines, 1):
-        # 1. Check Year Header
         header_match = HEADER_re.match(line)
         if header_match:
             year = int(header_match.group(1))
@@ -40,7 +27,6 @@ def verify_dataset(file_path: str) -> bool:
             years_seen.append(year)
             continue
             
-        # 2. Check Completed Entry
         comp_match = COMPLETED_re.match(line)
         if comp_match:
             day_num = int(comp_match.group(1))
@@ -48,7 +34,6 @@ def verify_dataset(file_path: str) -> bool:
                 errors.append(f"Line {line_num}: Expected Day {expected_day}, but got Day {day_num}")
             expected_day = day_num + 1
             
-            # Parse the inner numbers
             inner_content = comp_match.group(2)
             parts = re.split(r",?\[", inner_content)
             if len(parts) < 2:
@@ -65,16 +50,13 @@ def verify_dataset(file_path: str) -> bool:
                 errors.append(f"Line {line_num}: Failed to parse balls/PowerBall as integers: '{inner_content}'")
                 continue
                 
-            # Perform validation via the central validator
-            # (Note: draw_date is set to today's date for verification, as the date isn't stored in dataset_2.txt)
-            is_valid, err_msg = validate_draw_data(date.today(), main_nums, pb)
+            is_valid, err_msg = validate_draw_data(date.today(), main_nums, pb, len(main_nums), 1)
             if not is_valid:
                 errors.append(f"Line {line_num}: {err_msg}")
                 
             total_completed += 1
             continue
             
-        # 3. Check Placeholder Entry
         placeholder_match = PLACEHOLDER_re.match(line)
         if placeholder_match:
             day_num = int(placeholder_match.group(1))
@@ -84,15 +66,84 @@ def verify_dataset(file_path: str) -> bool:
             total_placeholders += 1
             continue
             
-        # If line is completely empty, it might be an error or whitespace
         if not line.strip():
             errors.append(f"Line {line_num}: Empty line detected")
             continue
             
         errors.append(f"Line {line_num}: Malformed line: '{line}'")
         
+    return total_completed, total_placeholders, years_seen
+
+def verify_records_dataset(records: list, errors: list) -> Tuple[int, int, list]:
+    expected_day = 1
+    last_year = None
+    years_seen = []
+    total_completed = 0
+    
+    for idx, r in enumerate(records):
+        day = r["day"]
+        year = r["year"]
+        main_balls = r["main_balls"]
+        powerball = r["powerball"]
+        
+        # Verify Day Sequence
+        if day != expected_day:
+            errors.append(f"Index {idx}: Expected Day {expected_day}, but got Day {day}")
+        expected_day = day + 1
+        
+        # Verify Year sequence
+        if last_year is not None and year < last_year:
+            errors.append(f"Index {idx} (Day {day}): Year {year} is less than previous year {last_year}")
+        last_year = year
+        if year not in years_seen:
+            years_seen.append(year)
+            
+        # Verify data constraints
+        # Set date to r["date"] if not None, otherwise default to today
+        draw_date = r["date"] if r["date"] is not None else date.today()
+        is_valid, err_msg = validate_draw_data(draw_date, main_balls, powerball, len(main_balls), 1)
+        if not is_valid:
+            errors.append(f"Day {day} ({draw_date}): {err_msg}")
+            
+        total_completed += 1
+        
+    return total_completed, 0, years_seen
+
+def verify_dataset(file_path: str) -> bool:
+    if not os.path.exists(file_path):
+        print(f"Error: Dataset file not found at {file_path}")
+        return False
+        
+    print(f"Verifying dataset health: {file_path}")
+    file_format = get_file_format(file_path)
+    errors = []
+    
+    total_completed = 0
+    total_placeholders = 0
+    years_seen = []
+    total_lines = 0
+    
+    if file_format == 'txt':
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                lines = [line.rstrip("\r\n") for line in f]
+                total_lines = len(lines)
+            total_completed, total_placeholders, years_seen = verify_txt_dataset(lines, errors)
+        except IOError as e:
+            print(f"Error reading dataset file: {e}")
+            return False
+    else:
+        # Load through formatter parser as structured records
+        try:
+            records, _, _ = parse_existing_dataset(file_path)
+            total_lines = len(records)
+            total_completed, total_placeholders, years_seen = verify_records_dataset(records, errors)
+        except Exception as e:
+            print(f"Error parsing database/structured records: {e}")
+            return False
+            
     print("\nVerification Results:")
-    print(f"- Total lines checked: {len(lines)}")
+    print(f"- Total records/lines checked: {total_lines}")
     print(f"- Years seen: {years_seen}")
     print(f"- Completed records: {total_completed}")
     print(f"- Placeholder records: {total_placeholders}")

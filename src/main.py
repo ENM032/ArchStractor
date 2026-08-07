@@ -5,7 +5,7 @@ import logging
 import argparse
 import re
 from datetime import date
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper import fetch_page
 from parser import parse_html_page
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def get_last_completed_draw_balls(last_line: str) -> Tuple[Optional[List[int]], Optional[int]]:
     """
-    Parses the ball numbers from the last completed draw line in dataset.
+    Parses the ball numbers from the last completed draw line in dataset (for TXT format).
     Example: "Day 21 - [1,8,31,43,44,[11]]" -> ([1, 8, 31, 43, 44], 11)
     """
     match = re.match(r"^Day\s+\d+\s+-\s+\[(\d+(?:,\d+)*,\[\d+\])\]$", last_line)
@@ -46,25 +46,32 @@ def get_last_completed_draw_balls(last_line: str) -> Tuple[Optional[List[int]], 
     except ValueError:
         return None, None
 
-def fetch_and_parse_year(year: int, url_template: str) -> Tuple[int, List[Tuple[date, List[int], int]], int, Optional[str]]:
+def fetch_and_parse_year(
+    year: int, 
+    url_template: str
+) -> Tuple[int, List[Tuple[date, List[int], int]], Dict[str, int], int, Optional[str]]:
     """
     Fetches and parses SA lottery results for a single year.
-    Returns: (year, valid_draws, validation_failures, error_url)
+    Returns: (year, valid_draws, schema, validation_failures, error_url)
     """
     url = url_template.format(year=year)
     validation_fails = 0
     try:
         html = fetch_page(url, retries=1)
-        draws = parse_html_page(html)
-        logger.info(f"Year {year}: parsed {len(draws)} draws from webpage")
+        draws, schema = parse_html_page(html)
+        logger.info(f"Year {year}: parsed {len(draws)} draws from webpage using schema {schema}")
         
         # Sort chronologically (oldest to newest)
         draws.sort(key=lambda x: x[0])
         
         year_new_draws = []
         for draw_date, main_balls, powerball in draws:
-            # Use validator to check data correctness
-            is_valid, err_msg = validate_draw_data(draw_date, main_balls, powerball)
+            # Use validator to check data correctness under dynamic schema
+            is_valid, err_msg = validate_draw_data(
+                draw_date, main_balls, powerball,
+                schema.get("num_main_balls", 5),
+                schema.get("num_power_balls", 1)
+            )
             if not is_valid:
                 logger.warning(f"Validation failure for draw in year {year}: {err_msg}")
                 validation_fails += 1
@@ -72,20 +79,20 @@ def fetch_and_parse_year(year: int, url_template: str) -> Tuple[int, List[Tuple[
             
             year_new_draws.append((draw_date, main_balls, powerball))
             
-        return year, year_new_draws, validation_fails, None
+        return year, year_new_draws, schema, validation_fails, None
         
     except Exception as e:
         logger.error(f"Failed to process year {year}: {e}")
-        return year, [], 0, url
+        return year, [], {"num_main_balls": 5, "num_power_balls": 1}, 0, url
 
 def main():
     # Parse CLI Arguments
-    parser = argparse.ArgumentParser(description="SA National Lottery PowerBall results extraction and dataset building tool")
+    parser = argparse.ArgumentParser(description="SA National Lottery results extraction and multi-format dataset builder")
     parser.add_argument("--start-year", "-s", type=int, default=2010, help="Start year for results retrieval (inclusive)")
     parser.add_argument("--end-year", "-e", type=int, default=2026, help="End year for results retrieval (inclusive)")
     parser.add_argument("--url-template", "-u", type=str, default=None, 
                         help="Base archive URL template with {year} placeholder")
-    parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset text file path")
+    parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset file path (.txt, .csv, .json, .sqlite)")
     parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra"], default=None, 
                         help="Preset shortcut for URL template")
     args = parser.parse_args()
@@ -99,7 +106,7 @@ def main():
         else:
             url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
 
-    logger.info("Starting SA PowerBall Draw Results Extraction process")
+    logger.info("Starting SA Lottery Draw Results Extraction process")
     logger.info(f"Configuration: Start={args.start_year}, End={args.end_year}, Game URL template={url_template}, Output={args.output}")
 
     # 1. Parse the existing dataset
@@ -124,6 +131,7 @@ def main():
     skipped_duplicates = 0
     total_validation_failures = 0
     years_processed = []
+    detected_schema = {"num_main_balls": 5, "num_power_balls": 1}
 
     logger.info(f"Initiating concurrent scrape for years {args.start_year} to {args.end_year}...")
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -135,13 +143,15 @@ def main():
         for future in as_completed(futures):
             year = futures[future]
             try:
-                yr, year_draws, val_fails, err_url = future.result()
+                yr, year_draws, schema, val_fails, err_url = future.result()
                 if err_url:
                     failed_urls.append(err_url)
                 else:
                     all_new_draws.extend(year_draws)
                     total_validation_failures += val_fails
                     years_processed.append(yr)
+                    # Adopt the detected schema (assuming it remains consistent)
+                    detected_schema = schema
             except Exception as exc:
                 logger.error(f"Thread execution error for year {year}: {exc}")
                 failed_urls.append(url_template.format(year=year))
@@ -154,8 +164,19 @@ def main():
     # 3. Dynamic Cutoff Determination by matching the last completed draw numbers
     cutoff_date = None
     if lines_to_keep:
-        last_line = lines_to_keep[-1]
-        last_main_balls, last_powerball = get_last_completed_draw_balls(last_line)
+        # Check type of records kept
+        last_item = lines_to_keep[-1]
+        last_main_balls = None
+        last_powerball = None
+        
+        if isinstance(last_item, dict):
+            # For CSV, JSON, SQLite records
+            last_main_balls = last_item.get("main_balls")
+            last_powerball = last_item.get("powerball")
+        else:
+            # For custom TXT string entries
+            last_main_balls, last_powerball = get_last_completed_draw_balls(last_item)
+            
         if last_main_balls and last_powerball is not None:
             logger.info(f"Searching for match of last completed draw: {last_main_balls} [{last_powerball}]")
             # Look for this draw in our scraped draws
@@ -189,6 +210,7 @@ def main():
         backup_path = args.output + ".bak"
         try:
             logger.info(f"Creating backup of {args.output} at {backup_path}")
+            # If database/sqlite, handle file copy safely
             shutil.copy2(args.output, backup_path)
         except IOError as e:
             logger.error(f"Failed to create backup file: {e}. Aborting write.")
