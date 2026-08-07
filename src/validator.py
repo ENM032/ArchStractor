@@ -32,8 +32,8 @@ def validate_draw_data(
     for ball in main_balls:
         if not isinstance(ball, int):
             return False, f"Main number '{ball}' is not an integer"
-        if not (1 <= ball <= 50):
-            return False, f"Main number {ball} is out of valid range [1, 50]"
+        if not (1 <= ball <= 58):
+            return False, f"Main number {ball} is out of valid range [1, 58]"
             
     # 5. Main balls uniqueness
     if len(set(main_balls)) != num_main_balls:
@@ -42,10 +42,10 @@ def validate_draw_data(
     # 6. Powerball validation
     if num_power_balls > 0:
         if powerball is None:
-            return False, "PowerBall number is missing"
+            return False, "PowerBall/Bonus number is missing"
         if not isinstance(powerball, int):
-            return False, f"PowerBall '{powerball}' is not an integer"
-        if not (1 <= powerball <= 20):
-            return False, f"PowerBall {powerball} is out of valid range [1, 20]"
+            return False, f"PowerBall/Bonus '{powerball}' is not an integer"
+        if not (1 <= powerball <= 58):
+            return False, f"PowerBall/Bonus {powerball} is out of valid range [1, 58]"
             
     return True, ""

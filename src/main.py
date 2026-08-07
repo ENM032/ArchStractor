@@ -97,8 +97,14 @@ def run_interactive_wizard() -> Tuple[int, int, Optional[str], str, Optional[str
     print("\nSelect Game Preset:")
     print("  [1] PowerBall (Default)")
     print("  [2] PowerBall Xtra")
-    choice = input("Enter choice (1-2) [1]: ").strip()
-    game = "powerball-xtra" if choice == "2" else "powerball"
+    print("  [3] Lotto")
+    choice = input("Enter choice (1-3) [1]: ").strip()
+    if choice == "2":
+        game = "powerball-xtra"
+    elif choice == "3":
+        game = "lotto"
+    else:
+        game = "powerball"
     
     # 2. Year Range
     current_year = date.today().year
@@ -111,7 +117,13 @@ def run_interactive_wizard() -> Tuple[int, int, Optional[str], str, Optional[str
     end_year = int(end_input) if end_input.isdigit() else current_year
     
     # 3. Output Path
-    default_output = "data/dataset_2.txt" if game == "powerball" else "data/dataset_xtra.txt"
+    if game == "powerball":
+        default_output = "data/dataset_2.txt"
+    elif game == "lotto":
+        default_output = "data/dataset_lotto.txt"
+    else:
+        default_output = "data/dataset_xtra.txt"
+        
     print(f"\nEnter Output Destination (supported: .txt, .csv, .json, .db, .sqlite):")
     output_path = input(f"Enter file path [{default_output}]: ").strip()
     if not output_path:
@@ -129,7 +141,13 @@ def run_interactive_wizard() -> Tuple[int, int, Optional[str], str, Optional[str
         print("Extraction canceled.")
         sys.exit(0)
         
-    url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive" if game == "powerball-xtra" else "https://za.national-lottery.com/powerball/results/{year}-archive"
+    if game == "powerball-xtra":
+        url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
+    elif game == "lotto":
+        url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
+    else:
+        url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+        
     return start_year, end_year, url_template, output_path, game
 
 def main():
@@ -145,7 +163,7 @@ def main():
         parser.add_argument("--url-template", "-u", type=str, default=None, 
                             help="Base archive URL template with {year} placeholder")
         parser.add_argument("--output", "-o", type=str, default="data/dataset_2.txt", help="Output dataset file path (.txt, .csv, .json, .db, .sqlite)")
-        parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra"], default=None, 
+        parser.add_argument("--game", "-g", type=str, choices=["powerball", "powerball-xtra", "lotto"], default=None, 
                             help="Preset shortcut for URL template")
         args = parser.parse_args()
 
@@ -159,6 +177,8 @@ def main():
             game = args.game or "powerball"
             if game == "powerball-xtra":
                 url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
+            elif game == "lotto":
+                url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
             else:
                 url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
 

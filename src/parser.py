@@ -92,7 +92,7 @@ def parse_html_page(html_content: str) -> Tuple[List[Tuple[datetime.date, List[i
     soup = BeautifulSoup(html_content, 'html.parser')
     
     # Match tables with any of the lottery class indicators, or fall back to the first table
-    table = soup.find('table', class_=lambda c: c and any(cls in c for cls in ['powerball', 'powerball-plus', 'powerball-xtra', 'mobResult']))
+    table = soup.find('table', class_=lambda c: c and any(cls in c for cls in ['powerball', 'powerball-plus', 'powerball-xtra', 'lotto', 'mobResult']))
     if not table:
         table = soup.find('table')
         
