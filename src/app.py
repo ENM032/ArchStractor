@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 import math
+from typing import List, Tuple
 
 # Set up page configurations
 st.set_page_config(
