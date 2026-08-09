@@ -40,6 +40,21 @@ st.markdown("""
     .metric-fail {
         border-left: 5px solid #d62728;
     }
+    @media (max-width: 768px) {
+        .metric-card {
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .metric-card h4 {
+            font-size: 0.95rem !important;
+        }
+        .metric-card h2 {
+            font-size: 1.3rem !important;
+        }
+        .metric-card p {
+            font-size: 0.8rem !important;
+        }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -208,7 +223,7 @@ def main():
             ax_freq.set_ylabel("Occurrences")
             ax_freq.set_xticks(range(1, max_ball_val + 1, 2 if max_ball_val > 40 else 1))
             ax_freq.legend()
-            st.pyplot(fig_freq)
+            st.pyplot(fig_freq, use_container_width=True)
         except Exception as e:
             st.error(f"Error rendering frequency distribution plot: {e}")
             plt.close()
@@ -313,7 +328,7 @@ def main():
             ax_sums.plot(x_range, stats.norm.pdf(x_range, mu_sum, sigma_sum), color='#d62728', linewidth=2, label='Fitted Normal')
             ax_sums.set_title(f"Distribution of Draw Sums (Mean={mu_sum:.1f}, Std={sigma_sum:.1f})")
             ax_sums.legend()
-            st.pyplot(fig_sums)
+            st.pyplot(fig_sums, use_container_width=True)
         except Exception as e:
             st.error(f"Error rendering draw sum normality trend: {e}")
             plt.close()
@@ -337,7 +352,7 @@ def main():
             ax_parity.set_ylabel("Occurrences")
             ax_parity.set_xticks(x)
             ax_parity.legend()
-            st.pyplot(fig_parity)
+            st.pyplot(fig_parity, use_container_width=True)
             
             st.subheader("Observed Parity Counts Table")
             parity_df = pd.DataFrame({
