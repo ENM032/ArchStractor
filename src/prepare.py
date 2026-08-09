@@ -233,10 +233,13 @@ def export_to_csv(filepath: str, records: List[Dict[str, Any]], num_main: int):
         "is_powerball_even"
     ])
     
-    with open(filepath, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(records)
+    try:
+        with open(filepath, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(records)
+    except IOError as e:
+        logger.error(f"IOError exporting cleaned data to CSV {filepath}: {e}")
 
 def export_to_json(filepath: str, records: List[Dict[str, Any]]):
     """Exports records to a JSON array of objects."""
@@ -247,71 +250,82 @@ def export_to_json(filepath: str, records: List[Dict[str, Any]]):
         clean_rec.pop("raw_main_balls", None)
         clean_records.append(clean_rec)
         
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(clean_records, f, indent=2)
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(clean_records, f, indent=2)
+    except IOError as e:
+        logger.error(f"IOError exporting cleaned data to JSON {filepath}: {e}")
 
 def export_to_sqlite(filepath: str, table_name: str, records: List[Dict[str, Any]], num_main: int):
     """Exports records to an SQLite database table."""
     if not records:
         return
         
-    conn = sqlite3.connect(filepath)
-    cursor = conn.cursor()
-    
-    # Drop existing table if any
-    cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-    
-    # Create Table schema
-    ball_cols = ", ".join(f"ball_{i} INTEGER" for i in range(1, num_main + 1))
-    schema_sql = f"""
-        CREATE TABLE {table_name} (
-            day INTEGER PRIMARY KEY,
-            date TEXT,
-            year INTEGER,
-            month INTEGER,
-            day_of_month INTEGER,
-            day_of_week INTEGER,
-            is_weekend INTEGER,
-            {ball_cols},
-            powerball INTEGER,
-            sum_main_balls INTEGER,
-            mean_main_balls REAL,
-            min_main_ball INTEGER,
-            max_main_ball INTEGER,
-            range_main_balls INTEGER,
-            odd_count INTEGER,
-            even_count INTEGER,
-            is_powerball_even INTEGER
-        )
-    """
-    cursor.execute(schema_sql)
-    
-    # Insert rows
-    cols = ["day", "date", "year", "month", "day_of_month", "day_of_week", "is_weekend"]
-    cols.extend(f"ball_{i}" for i in range(1, num_main + 1))
-    cols.extend([
-        "powerball",
-        "sum_main_balls",
-        "mean_main_balls",
-        "min_main_ball",
-        "max_main_ball",
-        "range_main_balls",
-        "odd_count",
-        "even_count",
-        "is_powerball_even"
-    ])
-    
-    placeholders = ", ".join("?" for _ in cols)
-    insert_sql = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})"
-    
-    rows_to_insert = []
-    for r in records:
-        row = [r.get(c) for c in cols]
-        rows_to_insert.append(row)
+    conn = None
+    try:
+        conn = sqlite3.connect(filepath)
+        cursor = conn.cursor()
         
-    cursor.executemany(insert_sql, rows_to_insert)
-    conn.commit()
-    conn.close()
+        # Drop existing table if any
+        cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+        
+        # Create Table schema
+        ball_cols = ", ".join(f"ball_{i} INTEGER" for i in range(1, num_main + 1))
+        schema_sql = f"""
+            CREATE TABLE {table_name} (
+                day INTEGER PRIMARY KEY,
+                date TEXT,
+                year INTEGER,
+                month INTEGER,
+                day_of_month INTEGER,
+                day_of_week INTEGER,
+                is_weekend INTEGER,
+                {ball_cols},
+                powerball INTEGER,
+                sum_main_balls INTEGER,
+                mean_main_balls REAL,
+                min_main_ball INTEGER,
+                max_main_ball INTEGER,
+                range_main_balls INTEGER,
+                odd_count INTEGER,
+                even_count INTEGER,
+                is_powerball_even INTEGER
+            )
+        """
+        cursor.execute(schema_sql)
+        
+        # Insert rows
+        cols = ["day", "date", "year", "month", "day_of_month", "day_of_week", "is_weekend"]
+        cols.extend(f"ball_{i}" for i in range(1, num_main + 1))
+        cols.extend([
+            "powerball",
+            "sum_main_balls",
+            "mean_main_balls",
+            "min_main_ball",
+            "max_main_ball",
+            "range_main_balls",
+            "odd_count",
+            "even_count",
+            "is_powerball_even"
+        ])
+        
+        placeholders = ", ".join("?" for _ in cols)
+        insert_sql = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})"
+        
+        rows_to_insert = []
+        for r in records:
+            row = [r.get(c) for c in cols]
+            rows_to_insert.append(row)
+            
+        cursor.executemany(insert_sql, rows_to_insert)
+        conn.commit()
+    except sqlite3.Error as e:
+        logger.error(f"SQLite Error exporting cleaned data to {filepath}: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
 
 # ==================== MAIN RUNNER ====================
 
@@ -333,18 +347,27 @@ def clean_and_prepare_file(raw_filepath: str, output_dir: str):
         return
         
     # 2. Detect game details
-    game = detect_game_type(file_name, raw_records)
-    num_main = len(raw_records[0]["main_balls"])
-    logger.info(f"Inferred Game Preset: {game.upper()} (Main Balls={num_main})")
-    
+    try:
+        game = detect_game_type(file_name, raw_records)
+        num_main = len(raw_records[0]["main_balls"])
+        logger.info(f"Inferred Game Preset: {game.upper()} (Main Balls={num_main})")
+    except Exception as e:
+        logger.error(f"Failed to infer game details for {file_name}: {e}")
+        return
+        
     # 3. Load crawled results to align draw dates
-    years = [rec["year"] for rec in raw_records]
-    min_year = min(years)
-    max_year = max(years)
-    logger.info(f"Scraping/loading archive timeline: {min_year} to {max_year}")
-    
-    crawled_draws = fetch_and_parse_crawled_draws(game, min_year, max_year)
-    logger.info(f"Loaded {len(crawled_draws)} chronological draws from archives.")
+    try:
+        years = [rec["year"] for rec in raw_records if "year" in rec]
+        if not years:
+            raise ValueError("No year entries found in the raw records.")
+        min_year = min(years)
+        max_year = max(years)
+        logger.info(f"Scraping/loading archive timeline: {min_year} to {max_year}")
+        crawled_draws = fetch_and_parse_crawled_draws(game, min_year, max_year)
+        logger.info(f"Loaded {len(crawled_draws)} chronological draws from archives.")
+    except Exception as e:
+        logger.error(f"Failed to fetch date-alignment archives for {game}: {e}")
+        return
     
     # Build date lookup mapping
     # Key: (tuple(sorted(main_balls)), powerball) -> date

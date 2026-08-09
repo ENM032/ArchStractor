@@ -179,42 +179,49 @@ def main():
         sorted_freqs = freq_series.sort_values(ascending=False)
         
         # Plot frequency distribution
-        fig_freq, ax_freq = plt.subplots(figsize=(12, 5))
-        colors = ['#1f77b4' for _ in range(max_ball_val)]
-        for idx, num in enumerate(freq_series.index):
-            if num in sorted_freqs.head(5).index:
-                colors[idx] = '#d62728'
-            elif num in sorted_freqs.tail(5).index:
-                colors[idx] = '#bcbd22'
-                
-        ax_freq.bar(freq_series.index, freq_series.values, color=colors, edgecolor='black', alpha=0.8)
-        ax_freq.axhline(y=len(all_balls)/max_ball_val, color='#2ca02c', linestyle='--', label=f'Expected Mean ({len(all_balls)/max_ball_val:.1f})')
-        ax_freq.set_title(f"{game_preset} Draw Frequency Distribution")
-        ax_freq.set_xlabel("Ball Number")
-        ax_freq.set_ylabel("Occurrences")
-        ax_freq.set_xticks(range(1, max_ball_val + 1, 2 if max_ball_val > 40 else 1))
-        ax_freq.legend()
-        st.pyplot(fig_freq)
+        try:
+            fig_freq, ax_freq = plt.subplots(figsize=(12, 5))
+            colors = ['#1f77b4' for _ in range(max_ball_val)]
+            for idx, num in enumerate(freq_series.index):
+                if num in sorted_freqs.head(5).index:
+                    colors[idx] = '#d62728'
+                elif num in sorted_freqs.tail(5).index:
+                    colors[idx] = '#bcbd22'
+                    
+            ax_freq.bar(freq_series.index, freq_series.values, color=colors, edgecolor='black', alpha=0.8)
+            ax_freq.axhline(y=len(all_balls)/max_ball_val, color='#2ca02c', linestyle='--', label=f'Expected Mean ({len(all_balls)/max_ball_val:.1f})')
+            ax_freq.set_title(f"{game_preset} Draw Frequency Distribution")
+            ax_freq.set_xlabel("Ball Number")
+            ax_freq.set_ylabel("Occurrences")
+            ax_freq.set_xticks(range(1, max_ball_val + 1, 2 if max_ball_val > 40 else 1))
+            ax_freq.legend()
+            st.pyplot(fig_freq)
+        except Exception as e:
+            st.error(f"Error rendering frequency distribution plot: {e}")
+            plt.close()
         
         # Display Hot & Cold Metrics side-by-side
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("🔥 Top 5 Hot Numbers")
-            hot_df = pd.DataFrame({
-                "Number": sorted_freqs.head(5).index,
-                "Draws Count": sorted_freqs.head(5).values,
-                "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.head(5).values]
-            })
-            st.dataframe(hot_df, use_container_width=True)
-            
-        with col2:
-            st.subheader("❄️ Bottom 5 Cold Numbers")
-            cold_df = pd.DataFrame({
-                "Number": sorted_freqs.tail(5).index,
-                "Draws Count": sorted_freqs.tail(5).values,
-                "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.tail(5).values]
-            })
-            st.dataframe(cold_df, use_container_width=True)
+        try:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("🔥 Top 5 Hot Numbers")
+                hot_df = pd.DataFrame({
+                    "Number": sorted_freqs.head(5).index,
+                    "Draws Count": sorted_freqs.head(5).values,
+                    "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.head(5).values]
+                })
+                st.dataframe(hot_df, use_container_width=True)
+                
+            with col2:
+                st.subheader("❄️ Bottom 5 Cold Numbers")
+                cold_df = pd.DataFrame({
+                    "Number": sorted_freqs.tail(5).index,
+                    "Draws Count": sorted_freqs.tail(5).values,
+                    "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.tail(5).values]
+                })
+                st.dataframe(cold_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error listing hot and cold statistics: {e}")
             
     # ==================== TAB 2: LIVE STATS SUITE ====================
     with tab2:
@@ -223,9 +230,23 @@ def main():
         st.markdown("---")
         
         # Execute tests on filtered subset
-        chi2_main, p_main = calculate_uniformity_test(all_balls, max_ball_val)
-        chi2_pb, p_pb = calculate_uniformity_test(df_filtered['powerball'].values, int(df_filtered['powerball'].max()))
-        runs_count, z_stat, p_runs = calculate_runs_test(df_filtered['sum_main_balls'].values)
+        try:
+            chi2_main, p_main = calculate_uniformity_test(all_balls, max_ball_val)
+        except Exception as e:
+            chi2_main, p_main = 0.0, 1.0
+            st.warning(f"Could not calculate uniformity stats for main balls: {e}")
+            
+        try:
+            chi2_pb, p_pb = calculate_uniformity_test(df_filtered['powerball'].values, int(df_filtered['powerball'].max()))
+        except Exception as e:
+            chi2_pb, p_pb = 0.0, 1.0
+            st.warning(f"Could not calculate uniformity stats for PowerBall: {e}")
+            
+        try:
+            runs_count, z_stat, p_runs = calculate_runs_test(df_filtered['sum_main_balls'].values)
+        except Exception as e:
+            runs_count, z_stat, p_runs = 0, 0.0, 1.0
+            st.warning(f"Could not calculate runs test for draw sums: {e}")
         
         col1, col2, col3 = st.columns(3)
         
@@ -270,68 +291,79 @@ def main():
             
         st.markdown("### 📊 Draw Sum Normality Trend")
         # Histogram of draw sums
-        fig_sums, ax_sums = plt.subplots(figsize=(8, 4))
-        sns.histplot(df_filtered['sum_main_balls'], kde=True, color='#9467bd', stat="density", bins=20, ax=ax_sums)
-        mu_sum = np.mean(df_filtered['sum_main_balls'])
-        sigma_sum = np.std(df_filtered['sum_main_balls'])
-        x_range = np.linspace(df_filtered['sum_main_balls'].min(), df_filtered['sum_main_balls'].max(), 200)
-        ax_sums.plot(x_range, stats.norm.pdf(x_range, mu_sum, sigma_sum), color='#d62728', linewidth=2, label='Fitted Normal')
-        ax_sums.set_title(f"Distribution of Draw Sums (Mean={mu_sum:.1f}, Std={sigma_sum:.1f})")
-        ax_sums.legend()
-        st.pyplot(fig_sums)
+        try:
+            fig_sums, ax_sums = plt.subplots(figsize=(8, 4))
+            sns.histplot(df_filtered['sum_main_balls'], kde=True, color='#9467bd', stat="density", bins=20, ax=ax_sums)
+            mu_sum = np.mean(df_filtered['sum_main_balls'])
+            sigma_sum = np.std(df_filtered['sum_main_balls'])
+            x_range = np.linspace(df_filtered['sum_main_balls'].min(), df_filtered['sum_main_balls'].max(), 200)
+            ax_sums.plot(x_range, stats.norm.pdf(x_range, mu_sum, sigma_sum), color='#d62728', linewidth=2, label='Fitted Normal')
+            ax_sums.set_title(f"Distribution of Draw Sums (Mean={mu_sum:.1f}, Std={sigma_sum:.1f})")
+            ax_sums.legend()
+            st.pyplot(fig_sums)
+        except Exception as e:
+            st.error(f"Error rendering draw sum normality trend: {e}")
+            plt.close()
         
     # ==================== TAB 3: PARITY SPLITS ====================
     with tab3:
         st.header("⚖️ Parity Distributions (Odd vs. Even)")
         st.markdown(f"Evaluates if odd/even ball ratios match binomial expectations $B({num_main}, 0.5)$.")
         
-        chi2_parity, p_parity, obs, exp = calculate_parity_test(df_filtered['odd_count'].values, num_main)
-        
-        fig_parity, ax_parity = plt.subplots(figsize=(8, 4.5))
-        x = np.arange(num_main + 1)
-        width = 0.35
-        
-        ax_parity.bar(x - width/2, obs, width, label='Observed Counts', color='#2ca02c', alpha=0.8)
-        ax_parity.bar(x + width/2, exp, width, label='Binomial Projection', color='#ff7f0e', alpha=0.8)
-        ax_parity.set_title("Odd Balls Counts per Draw vs. Binomial Projections")
-        ax_parity.set_xlabel("Number of Odd Balls")
-        ax_parity.set_ylabel("Occurrences")
-        ax_parity.set_xticks(x)
-        ax_parity.legend()
-        st.pyplot(fig_parity)
-        
-        st.subheader("📊 observed Parity Counts Table")
-        parity_df = pd.DataFrame({
-            "Odd Balls Count": [f"{i} Odd / {num_main - i} Even" for i in range(num_main + 1)],
-            "Observed Draws": obs,
-            "Expected Draws": [round(val, 1) for val in exp],
-            "Percentage (%)": [round((val / total_draws) * 100, 2) for val in obs]
-        })
-        st.dataframe(parity_df, use_container_width=True)
+        try:
+            chi2_parity, p_parity, obs, exp = calculate_parity_test(df_filtered['odd_count'].values, num_main)
+            
+            fig_parity, ax_parity = plt.subplots(figsize=(8, 4.5))
+            x = np.arange(num_main + 1)
+            width = 0.35
+            
+            ax_parity.bar(x - width/2, obs, width, label='Observed Counts', color='#2ca02c', alpha=0.8)
+            ax_parity.bar(x + width/2, exp, width, label='Binomial Projection', color='#ff7f0e', alpha=0.8)
+            ax_parity.set_title("Odd Balls Counts per Draw vs. Binomial Projections")
+            ax_parity.set_xlabel("Number of Odd Balls")
+            ax_parity.set_ylabel("Occurrences")
+            ax_parity.set_xticks(x)
+            ax_parity.legend()
+            st.pyplot(fig_parity)
+            
+            st.subheader("📊 Observed Parity Counts Table")
+            parity_df = pd.DataFrame({
+                "Odd Balls Count": [f"{i} Odd / {num_main - i} Even" for i in range(num_main + 1)],
+                "Observed Draws": obs,
+                "Expected Draws": [round(val, 1) for val in exp],
+                "Percentage (%)": [round((val / total_draws) * 100, 2) for val in obs]
+            })
+            st.dataframe(parity_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error calculating or rendering parity distributions: {e}")
+            plt.close()
         
     # ==================== TAB 4: HISTORY SEARCH ====================
     with tab4:
-        st.header("🔍 Historical Draws database Search")
+        st.header("🔍 Historical Draws Database Search")
         st.markdown("Search past draw records, winning numbers, and generated features.")
         
         # User search queries
         search_query = st.text_input("Filter by date (YYYY-MM-DD) or search draws details:")
         
-        history_df = df_filtered.copy()
-        
-        # Format draw numbers column for easy reading
-        history_df['winning_numbers'] = history_df[ball_cols].values.tolist()
-        history_df['winning_numbers'] = history_df['winning_numbers'].apply(lambda lst: ", ".join(map(str, lst)))
-        
-        display_cols = ["day", "date", "winning_numbers", "powerball", "sum_main_balls", "odd_count", "even_count"]
-        
-        if search_query:
-            # Query match
-            mask_date = history_df['date'].astype(str).str.contains(search_query)
-            mask_num = history_df['winning_numbers'].str.contains(search_query)
-            history_df = history_df[mask_date | mask_num]
+        try:
+            history_df = df_filtered.copy()
             
-        st.dataframe(history_df[display_cols], use_container_width=True)
+            # Format draw numbers column for easy reading
+            history_df['winning_numbers'] = history_df[ball_cols].values.tolist()
+            history_df['winning_numbers'] = history_df['winning_numbers'].apply(lambda lst: ", ".join(map(str, lst)))
+            
+            display_cols = ["day", "date", "winning_numbers", "powerball", "sum_main_balls", "odd_count", "even_count"]
+            
+            if search_query:
+                # Query match
+                mask_date = history_df['date'].astype(str).str.contains(search_query)
+                mask_num = history_df['winning_numbers'].str.contains(search_query)
+                history_df = history_df[mask_date | mask_num]
+                
+            st.dataframe(history_df[display_cols], use_container_width=True)
+        except Exception as e:
+            st.error(f"Error displaying historical database search: {e}")
 
 if __name__ == "__main__":
     main()

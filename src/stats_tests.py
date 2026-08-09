@@ -35,24 +35,34 @@ def load_cleaned_data(filepath: str) -> Tuple[List[List[int]], List[int], List[i
     odd_counts = []
     num_main_balls = 5  # default fallback
     
-    with open(filepath, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        
-        # Determine number of main balls from columns
-        cols = reader.fieldnames or []
-        ball_cols = [c for c in cols if c.startswith("ball_")]
-        num_main_balls = len(ball_cols)
-        
-        for row in reader:
-            main = [int(row[f"ball_{i}"]) for i in range(1, num_main_balls + 1)]
-            pb = int(row["powerball"])
-            d_sum = int(row["sum_main_balls"])
-            odds = int(row["odd_count"])
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
             
-            main_draws.append(main)
-            powerballs.append(pb)
-            draw_sums.append(d_sum)
-            odd_counts.append(odds)
+            # Determine number of main balls from columns
+            cols = reader.fieldnames or []
+            ball_cols = [c for c in cols if c.startswith("ball_")]
+            num_main_balls = len(ball_cols)
+            
+            if num_main_balls == 0:
+                raise ValueError("No main ball columns discovered in CSV file headers.")
+                
+            for idx, row in enumerate(reader, 1):
+                try:
+                    main = [int(row[f"ball_{i}"]) for i in range(1, num_main_balls + 1)]
+                    pb = int(row["powerball"])
+                    d_sum = int(row["sum_main_balls"])
+                    odds = int(row["odd_count"])
+                    
+                    main_draws.append(main)
+                    powerballs.append(pb)
+                    draw_sums.append(d_sum)
+                    odd_counts.append(odds)
+                except (KeyError, ValueError, TypeError) as row_err:
+                    logger.warning(f"Skipping malformed row {idx} in {filepath}: {row_err}")
+    except (IOError, ValueError) as file_err:
+        logger.error(f"Failed to read CSV dataset {filepath}: {file_err}")
+        raise file_err
             
     return main_draws, powerballs, draw_sums, odd_counts, num_main_balls
 
@@ -63,8 +73,13 @@ def run_uniformity_test(numbers: List[int], min_val: int, max_val: int) -> Tuple
     Performs Chi-Square Goodness-of-Fit test against uniform expected frequencies.
     Returns: (chi2_statistic, p_value)
     """
+    if not numbers or max_val < min_val:
+        return 0.0, 1.0
+        
     total_count = len(numbers)
     num_bins = max_val - min_val + 1
+    if num_bins <= 0:
+        return 0.0, 1.0
     
     # Calculate observed frequencies
     observed = [0] * num_bins
@@ -75,8 +90,13 @@ def run_uniformity_test(numbers: List[int], min_val: int, max_val: int) -> Tuple
     # Expected frequency under uniform distribution
     expected = [total_count / num_bins] * num_bins
     
-    chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
-    return chi2, p_val
+    try:
+        chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
+        # Convert numpy floats to standard Python float to avoid printing wrappers
+        return float(chi2), float(p_val)
+    except Exception as e:
+        logger.error(f"Error in uniformity chi-square test: {e}")
+        return 0.0, 1.0
 
 def run_wald_wolfowitz_runs_test(sequence: List[int]) -> Tuple[int, float, float]:
     """
@@ -84,7 +104,7 @@ def run_wald_wolfowitz_runs_test(sequence: List[int]) -> Tuple[int, float, float
     Calculates if sequence of values fluctuates randomly above/below median.
     Returns: (runs_count, z_statistic, p_value)
     """
-    if not sequence:
+    if not sequence or len(sequence) < 2:
         return 0, 0.0, 1.0
         
     median_val = sorted(sequence)[len(sequence) // 2]
@@ -108,19 +128,28 @@ def run_wald_wolfowitz_runs_test(sequence: List[int]) -> Tuple[int, float, float
     expected_runs = (2.0 * n1 * n2) / (n1 + n2) + 1.0
     variance = (2.0 * n1 * n2 * (2.0 * n1 * n2 - n1 - n2)) / (((n1 + n2) ** 2) * (n1 + n2 - 1))
     
+    if variance <= 0:
+        return runs, 0.0, 1.0
+        
     # Z-statistic
     z_stat = (runs - expected_runs) / math.sqrt(variance)
     
-    # Two-tailed p-value
-    p_val = stats.norm.sf(abs(z_stat)) * 2.0
-    
-    return runs, z_stat, p_val
+    try:
+        # Two-tailed p-value
+        p_val = stats.norm.sf(abs(z_stat)) * 2.0
+        return runs, float(z_stat), float(p_val)
+    except Exception as e:
+        logger.error(f"Error calculating runs normal CDF: {e}")
+        return runs, float(z_stat), 1.0
 
-def run_parity_binomial_test(odd_counts: List[int], num_main_balls: int) -> Tuple[float, float, List[float], List[float]]:
+def run_parity_binomial_test(odd_counts: List[int], num_main_balls: int) -> Tuple[float, float, List[int], List[float]]:
     """
     Tests if the distribution of odd balls per draw conforms to binomial distribution B(N, 0.5).
     Returns: (chi2_statistic, p_value, observed_freqs, expected_freqs)
     """
+    if not odd_counts or num_main_balls <= 0:
+        return 0.0, 1.0, [0] * (num_main_balls + 1), [0.0] * (num_main_balls + 1)
+        
     total_draws = len(odd_counts)
     
     # Observed frequencies of draws containing k odd balls (0 to N)
@@ -132,12 +161,18 @@ def run_parity_binomial_test(odd_counts: List[int], num_main_balls: int) -> Tupl
     # Expected frequencies using binomial PMF
     expected = []
     for k in range(num_main_balls + 1):
-        # binom.pmf(k, N, 0.5)
-        pmf_val = stats.binom.pmf(k, num_main_balls, 0.5)
-        expected.append(total_draws * pmf_val)
+        try:
+            pmf_val = stats.binom.pmf(k, num_main_balls, 0.5)
+            expected.append(total_draws * pmf_val)
+        except Exception:
+            expected.append(0.0)
         
-    chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
-    return chi2, p_val, observed, expected
+    try:
+        chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
+        return float(chi2), float(p_val), observed, [float(x) for x in expected]
+    except Exception as e:
+        logger.error(f"Error in parity chi-square test: {e}")
+        return 0.0, 1.0, observed, [float(x) for x in expected]
 
 # ==================== MAIN RUNNER ====================
 
