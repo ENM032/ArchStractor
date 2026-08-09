@@ -157,9 +157,34 @@ If everything is healthy, you will see this success message:
 
 ---
 
-## 8. Understanding Backups and Logs
+## 8. Cleaning & Preparing Data (ML Feature Engineering)
+
+If you want to prepare your lottery datasets for downstream machine learning (ML), data analysis, or statistical modeling, run the automated preparation pipeline script:
+
+```bash
+python src/prepare.py
+```
+
+### What this script does:
+1. **Auto-discovers raw files**: Scans `data/` for text datasets (`dataset_2.txt`, `dataset_lotto.txt`, `dataset_xtra.txt`).
+2. **Reconstructs draw dates**: Aligns day numbers with official historical draw dates (using the local HTML cache).
+3. **Validates & Checks for Gaps**: Confirms chronological chronology, checks for sequence gaps, and checks for missing draws (such as public holidays like Christmas Day or Good Friday when draws are not held).
+4. **Engineers Statistical/ML Features**: Automatically generates:
+   - Calendar features: `year`, `month`, `day_of_month`, `day_of_week` (0-6), `is_weekend` (0 or 1).
+   - Draw metrics: `sum_main_balls`, `mean_main_balls`, `min_main_ball`, `max_main_ball`, `range_main_balls` (max - min).
+   - Parity metrics: `odd_count`, `even_count`, and `is_powerball_even` (0 or 1).
+5. **Exports Structured Formats**: Saves the cleaned, feature-enriched data to a new `data/cleaned/` directory:
+   - **CSV** (e.g. `data/cleaned/powerball_clean.csv`) - ready for analysis in Pandas or Excel.
+   - **JSON** (e.g. `data/cleaned/powerball_clean.json`) - ready for JavaScript/Web platforms.
+   - **SQLite** (e.g. `data/cleaned/powerball_clean.db`) - database file ready for SQL queries.
+
+---
+
+## 9. Understanding Backups and Logs
 
 ArcStractor has safety measures built in so you don't lose your data:
 
 - **Automatic Backups**: Whenever you update an existing file, the tool automatically makes a copy of the old file and saves it with a `.bak` extension (e.g., `data/dataset_2.txt.bak`). If something goes wrong during the scrape, it restores the backup automatically.
 - **Extraction Logs**: All details of the scraper execution—such as validation warnings, URLs scraped, and entries skipped—are saved to a file named `extraction.log` in the project folder. Open this file in any text editor if you want to inspect what the tool did.
+- **Preparation Logs**: Execution logs for the preparation script are stored in `preparation.log`.
+

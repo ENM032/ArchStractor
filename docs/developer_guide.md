@@ -101,6 +101,16 @@ sequenceDiagram
   - **Auto-Format Detection**: Checks file extension to choose either raw line parsing (for TXT files) or structured record verification (for CSV, JSON, and SQLite).
   - **Sequence Validation**: Confirms that day indexes are strictly sequential (incrementing by 1), year timelines are ascending, and calls the central `validator.py` constraints on each draw.
 
+### `src/prepare.py`
+- **Purpose**: A comprehensive data cleaning, gap detection, and feature engineering pipeline script.
+- **Key Features**:
+  - **Auto-Discovery**: Scans the `data/` folder for any raw `.txt` files (filtering out backups) and processes them.
+  - **Game Type Detection**: Infers if a file belongs to `powerball`, `powerball-xtra`, or `lotto` based on names and column layout.
+  - **Cache-Aligned Date Reconstruction**: Resolves exact draw dates by mapping raw results against chronological HTML pages cached locally (or fetching missing archives dynamically from the web).
+  - **Gap and Anomaly Checker**: Evaluates sequence consistency and flags dates when draws were expected but not recorded (e.g. Christmas Day or Good Friday).
+  - **ML Feature Engineering**: Augments the dataset with calendar attributes (`is_weekend`, `day_of_week`), sum/mean statistics, parity counts (`odd_count`, `even_count`), and bonus/powerball characteristics.
+  - **Clean Multi-Format Exporters**: Writes clean datasets containing the engineered features to `data/cleaned/` in CSV, JSON, and SQLite database file formats.
+
 ---
 
 ## 4. Containerization & Tooling
