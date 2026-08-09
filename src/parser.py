@@ -61,8 +61,17 @@ def detect_draw_schema(ball_lis: List[Any]) -> Tuple[int, int]:
     for li in ball_lis:
         classes = li.get('class', [])
         classes_str = " ".join(classes).lower()
-        # Check for PowerBall or bonus ball tags (avoiding "pb" since main balls have "pb" class)
-        if any(x in classes_str for x in ['powerball', 'bonus', 'bonusball', 'supp']):
+        
+        # Check for PowerBall or bonus ball tags, ignoring full-game classes like powerball-plus/powerball-xtra
+        is_power = False
+        for cls in classes:
+            cls_lower = cls.lower()
+            if any(x in cls_lower for x in ['powerball', 'bonus', 'bonusball', 'supp']):
+                if cls_lower not in ['powerball-plus', 'powerball-xtra']:
+                    is_power = True
+                    break
+                    
+        if is_power:
             num_power += 1
         elif 'ball' in classes_str:
             num_main += 1
