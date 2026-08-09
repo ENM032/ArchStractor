@@ -263,6 +263,11 @@ def export_to_sqlite(filepath: str, table_name: str, records: List[Dict[str, Any
         
     conn = None
     try:
+        import re
+        # Sanitize database table name to prevent SQL injection
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+            raise ValueError(f"Dangerous database table name detected: {table_name}")
+            
         conn = sqlite3.connect(filepath)
         cursor = conn.cursor()
         
@@ -309,6 +314,11 @@ def export_to_sqlite(filepath: str, table_name: str, records: List[Dict[str, Any
             "is_powerball_even"
         ])
         
+        # Sanitize column names
+        for col in cols:
+            if not re.match(r"^[a-zA-Z0-9_]+$", col):
+                raise ValueError(f"Dangerous database column name detected: {col}")
+                
         placeholders = ", ".join("?" for _ in cols)
         insert_sql = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})"
         

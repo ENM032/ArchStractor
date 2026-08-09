@@ -5,6 +5,10 @@ import os
 import re
 from datetime import date
 from typing import Optional
+try:
+    from config import MAX_PAGE_SIZE
+except ModuleNotFoundError:
+    from src.config import MAX_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +61,15 @@ def fetch_page(url: str, retries: int = 1, timeout: int = 15) -> str:
     for attempt in range(retries + 1):
         try:
             logger.info(f"Fetching URL: {url} (Attempt {attempt + 1}/{retries + 1})")
-            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
+            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout, verify=True, stream=True)
             if response.status_code == 200:
-                html_content = response.text
+                html_bytes = b""
+                for chunk in response.iter_content(chunk_size=1024 * 64):
+                    html_bytes += chunk
+                    if len(html_bytes) > MAX_PAGE_SIZE:
+                        raise ValueError(f"Fetched page size from {url} exceeds safety limit of {MAX_PAGE_SIZE} bytes")
+                
+                html_content = html_bytes.decode("utf-8", errors="ignore")
                 
                 # Write to cache if applicable
                 if cache_path:
@@ -75,6 +85,9 @@ def fetch_page(url: str, retries: int = 1, timeout: int = 15) -> str:
                 logger.warning(f"Failed to fetch {url}. Status code: {response.status_code}")
         except requests.RequestException as e:
             logger.warning(f"Error fetching {url}: {e}")
+        except ValueError as val_err:
+            logger.error(f"Payload limit error for URL {url}: {val_err}")
+            raise val_err
         
         if attempt < retries:
             time.sleep(2)  # Delay before retry

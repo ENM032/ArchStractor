@@ -333,6 +333,11 @@ def append_sqlite_results(
     appended_count = 0
     
     cols = ["day", "date"] + [f"ball_{i}" for i in range(1, num_main + 1)] + ["powerball"]
+    # Sanitize database identifiers to prevent potential SQL injection vectors
+    for col in cols:
+        if not re.match(r"^[a-zA-Z0-9_]+$", col):
+            raise ValueError(f"Dangerous database identifier detected: {col}")
+            
     placeholders = ", ".join("?" for _ in cols)
     sql = f"INSERT INTO draw_results ({', '.join(cols)}) VALUES ({placeholders})"
     

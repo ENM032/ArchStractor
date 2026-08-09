@@ -69,7 +69,8 @@ def load_game_data(filepath: str) -> pd.DataFrame:
     return df
 
 # Helper runs test calculation
-def calculate_runs_test(sequence: List[int]) -> Tuple[int, float, float]:
+@st.cache_data
+def calculate_runs_test(sequence: Tuple[int, ...]) -> Tuple[int, float, float]:
     """Wald-Wolfowitz Runs Test for sequence independence."""
     if len(sequence) < 2:
         return 0, 0.0, 1.0
@@ -100,7 +101,8 @@ def calculate_runs_test(sequence: List[int]) -> Tuple[int, float, float]:
     return runs, z_stat, p_val
 
 # Helper Chi-Square Uniformity calculation
-def calculate_uniformity_test(numbers: List[int], max_val: int) -> Tuple[float, float]:
+@st.cache_data
+def calculate_uniformity_test(numbers: Tuple[int, ...], max_val: int) -> Tuple[float, float]:
     num_bins = max_val
     observed = [0] * num_bins
     for num in numbers:
@@ -111,7 +113,8 @@ def calculate_uniformity_test(numbers: List[int], max_val: int) -> Tuple[float, 
     return chi2, p_val
 
 # Helper Parity Binomial calculation
-def calculate_parity_test(odd_counts: List[int], num_main: int) -> Tuple[float, float, List[int], List[float]]:
+@st.cache_data
+def calculate_parity_test(odd_counts: Tuple[int, ...], num_main: int) -> Tuple[float, float, List[int], List[float]]:
     total = len(odd_counts)
     observed = [0] * (num_main + 1)
     for k in odd_counts:
@@ -257,21 +260,20 @@ def main():
         st.markdown("Run standard mathematical tests dynamically over the selected date range.")
         st.markdown("---")
         
-        # Execute tests on filtered subset
         try:
-            chi2_main, p_main = calculate_uniformity_test(all_balls, max_ball_val)
+            chi2_main, p_main = calculate_uniformity_test(tuple(all_balls), max_ball_val)
         except Exception as e:
             chi2_main, p_main = 0.0, 1.0
             st.warning(f"Could not calculate uniformity stats for main balls: {e}")
             
         try:
-            chi2_pb, p_pb = calculate_uniformity_test(df_filtered['powerball'].values, int(df_filtered['powerball'].max()))
+            chi2_pb, p_pb = calculate_uniformity_test(tuple(df_filtered['powerball'].values), int(df_filtered['powerball'].max()))
         except Exception as e:
             chi2_pb, p_pb = 0.0, 1.0
             st.warning(f"Could not calculate uniformity stats for PowerBall: {e}")
             
         try:
-            runs_count, z_stat, p_runs = calculate_runs_test(df_filtered['sum_main_balls'].values)
+            runs_count, z_stat, p_runs = calculate_runs_test(tuple(df_filtered['sum_main_balls'].values))
         except Exception as e:
             runs_count, z_stat, p_runs = 0, 0.0, 1.0
             st.warning(f"Could not calculate runs test for draw sums: {e}")
@@ -339,7 +341,7 @@ def main():
         st.markdown(f"Evaluates if odd/even ball ratios match binomial expectations $B({num_main}, 0.5)$.")
         
         try:
-            chi2_parity, p_parity, obs, exp = calculate_parity_test(df_filtered['odd_count'].values, num_main)
+            chi2_parity, p_parity, obs, exp = calculate_parity_test(tuple(df_filtered['odd_count'].values), num_main)
             
             fig_parity, ax_parity = plt.subplots(figsize=(8, 4.5))
             x = np.arange(num_main + 1)
