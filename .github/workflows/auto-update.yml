@@ -1,0 +1,51 @@
+name: Auto-Update Lottery Datasets
+
+on:
+  schedule:
+    # Run at 20:30 UTC (22:30 SAST) on Tuesday, Wednesday, Friday, Saturday
+    - cron: '30 20 * * 2,3,5,6'
+  workflow_dispatch:
+
+jobs:
+  update-datasets:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Scraper (PowerBall)
+      run: python src/main.py --game powerball -o data/dataset_2.txt
+
+    - name: Run Scraper (PowerBall Xtra)
+      run: python src/main.py --game powerball-xtra -o data/dataset_xtra.txt
+
+    - name: Run Scraper (Lotto)
+      run: python src/main.py --game lotto -o data/dataset_lotto.txt
+
+    - name: Run Preparation & Feature Engineering
+      run: python src/prepare.py
+
+    - name: Regenerate Visualizations (EDA)
+      run: python src/eda.py
+
+    - name: Run Randomness Diagnostics check
+      run: python src/stats_tests.py
+
+    - name: Commit and Push Updates
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add data/dataset_2.txt data/dataset_lotto.txt data/dataset_xtra.txt data/cleaned/ docs/
+        git commit -m "Auto-update lottery datasets & charts [skip ci]" || echo "No changes to commit"
+        git push origin main
