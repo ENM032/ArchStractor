@@ -160,11 +160,20 @@ def main():
     all_balls = df_filtered[ball_cols].values.flatten()
     max_ball_val = int(np.max(all_balls))
     
-    # Global metrics display
     st.sidebar.markdown("### Dataset Statistics")
     st.sidebar.metric("Total Draws in Filter", f"{total_draws}")
     st.sidebar.metric("Time Span", f"{year_range[0]} - {year_range[1]}")
     st.sidebar.metric("Main Ball Schema Range", f"1 - {max_ball_val}")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Admin Controls")
+    if st.sidebar.button("Shutdown Dashboard", help="Terminates the Streamlit web server process"):
+        st.sidebar.success("Dashboard server shutting down... You can now close this tab.")
+        import time
+        import signal
+        time.sleep(1)
+        os.kill(os.getpid(), signal.SIGINT)
+        
     
     # Setup tabs
     tab1, tab2, tab3, tab4 = st.tabs([
