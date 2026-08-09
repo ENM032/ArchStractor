@@ -211,7 +211,7 @@ def main():
                     "Draws Count": sorted_freqs.head(5).values,
                     "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.head(5).values]
                 })
-                st.dataframe(hot_df, use_container_width=True)
+                st.dataframe(hot_df, width="stretch")
                 
             with col2:
                 st.subheader("❄️ Bottom 5 Cold Numbers")
@@ -220,7 +220,7 @@ def main():
                     "Draws Count": sorted_freqs.tail(5).values,
                     "Percentage (%)": [round((val / total_draws) * 100, 2) for val in sorted_freqs.tail(5).values]
                 })
-                st.dataframe(cold_df, use_container_width=True)
+                st.dataframe(cold_df, width="stretch")
         except Exception as e:
             st.error(f"Error listing hot and cold statistics: {e}")
             
@@ -334,7 +334,7 @@ def main():
                 "Expected Draws": [round(val, 1) for val in exp],
                 "Percentage (%)": [round((val / total_draws) * 100, 2) for val in obs]
             })
-            st.dataframe(parity_df, use_container_width=True)
+            st.dataframe(parity_df, width="stretch")
         except Exception as e:
             st.error(f"Error calculating or rendering parity distributions: {e}")
             plt.close()
@@ -362,7 +362,7 @@ def main():
                 mask_num = history_df['winning_numbers'].str.contains(search_query)
                 history_df = history_df[mask_date | mask_num]
                 
-            st.dataframe(history_df[display_cols], use_container_width=True)
+            st.dataframe(history_df[display_cols], width="stretch")
         except Exception as e:
             st.error(f"Error displaying historical database search: {e}")
 
