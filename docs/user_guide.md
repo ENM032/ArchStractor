@@ -180,7 +180,24 @@ python src/prepare.py
 
 ---
 
-## 9. Understanding Backups and Logs
+## 9. Interactive Streamlit Web Dashboard
+
+If you prefer a graphical user interface to explore historical statistics and live mathematical tests, launch the Streamlit web dashboard:
+
+```bash
+streamlit run src/app.py
+```
+
+### Dashboard Features:
+1. **Interactive Timeline Range**: Slide the year bounds in the sidebar to dynamically filter statistics over customized eras.
+2. **Number Frequency & Highlights**: View hot and cold numbers instantly, with expectation bounds plotted.
+3. **Live Mathematical Tests**: Recalculates Chi-Square Uniformity and Wald-Wolfowitz runs tests dynamically over your selected subset, displaying red/green status indicator cards.
+4. **Odd/Even Binomial Projections**: Renders bar charts comparing actual odd/even draw splits against theoretical binomial expectations.
+5. **Draw History Query Table**: Search or filter past draw values or specific dates inside an interactive datatable.
+
+---
+
+## 10. Understanding Backups and Logs
 
 ArcStractor has safety measures built in so you don't lose your data:
 

@@ -111,6 +111,14 @@ sequenceDiagram
   - **ML Feature Engineering**: Augments the dataset with calendar attributes (`is_weekend`, `day_of_week`), sum/mean statistics, parity counts (`odd_count`, `even_count`), and bonus/powerball characteristics.
   - **Clean Multi-Format Exporters**: Writes clean datasets containing the engineered features to `data/cleaned/` in CSV, JSON, and SQLite database file formats.
 
+### `src/app.py`
+- **Purpose**: An interactive data dashboard application built with Streamlit.
+- **Key Features**:
+  - **Live Reload Filtering**: Leverages pandas to filter historical datasets dynamically via year sliders.
+  - **Dynamic Randomness Tests**: Computes statistical uniformity (Chi-Square) and serial correlation (Wald-Wolfowitz Runs test) on-the-fly for any subset of years.
+  - **Binomial Ratios Validation**: Visualizes actual draw odd/even distributions against $B(N, 0.5)$ binomial probability distributions.
+  - **Data History Finder**: Provides a searchable history table to query past draws.
+
 ---
 
 ## 4. Containerization & Tooling
