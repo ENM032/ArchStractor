@@ -12,7 +12,6 @@ from typing import List, Tuple
 # Set up page configurations
 st.set_page_config(
     page_title="ArcStractor SA Lottery Dashboard",
-    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -26,10 +25,14 @@ st.markdown("""
     .metric-card {
         padding: 15px;
         background: #ffffff;
+        color: #111111;
         border-radius: 8px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         margin-bottom: 15px;
         border-left: 5px solid #1f77b4;
+    }
+    .metric-card h2, .metric-card h4, .metric-card p {
+        color: #111111 !important;
     }
     .metric-pass {
         border-left: 5px solid #2ca02c;
@@ -107,12 +110,12 @@ def calculate_parity_test(odd_counts: List[int], num_main: int) -> Tuple[float, 
     return chi2, p_val, observed, expected
 
 def main():
-    st.title("📊 SA National Lottery Data Analytics Dashboard")
+    st.title("SA National Lottery Data Analytics Dashboard")
     st.markdown("Interactive analysis of historical results, statistical checks, and ML feature distributions.")
     st.markdown("---")
     
     # Sidebar Configuration
-    st.sidebar.header("🔧 Configuration Preset")
+    st.sidebar.header("Configuration Preset")
     game_preset = st.sidebar.selectbox(
         "Select Game Preset:",
         ["PowerBall", "PowerBall Xtra", "Lotto"]
@@ -137,7 +140,7 @@ def main():
     min_year = int(df['year'].min())
     max_year = int(df['year'].max())
     
-    st.sidebar.markdown("### 📅 Date Filters")
+    st.sidebar.markdown("### Date Filters")
     year_range = st.sidebar.slider(
         "Select Year Range:",
         min_year, max_year, (min_year, max_year)
@@ -158,22 +161,22 @@ def main():
     max_ball_val = int(np.max(all_balls))
     
     # Global metrics display
-    st.sidebar.markdown("### 📈 Dataset Statistics")
+    st.sidebar.markdown("### Dataset Statistics")
     st.sidebar.metric("Total Draws in Filter", f"{total_draws}")
     st.sidebar.metric("Time Span", f"{year_range[0]} - {year_range[1]}")
     st.sidebar.metric("Main Ball Schema Range", f"1 - {max_ball_val}")
     
     # Setup tabs
     tab1, tab2, tab3, tab4 = st.tabs([
-        "🎱 Number Frequencies & Highlights",
-        "🧮 Live Randomness Tests",
-        "⚖️ Parity (Odd/Even splits)",
-        "🔍 History Search Table"
+        "Number Frequencies & Highlights",
+        "Live Randomness Tests",
+        "Parity (Odd/Even splits)",
+        "History Search Table"
     ])
     
     # ==================== TAB 1: FREQUENCIES ====================
     with tab1:
-        st.header("🎱 Number Frequency Distribution")
+        st.header("Number Frequency Distribution")
         st.markdown("Highlights standard frequency counts. The **Top 5 Hot Numbers** are highlighted in **red** and the **Bottom 5 Cold Numbers** in **yellow**.")
         
         freq_series = pd.Series(all_balls).value_counts().reindex(range(1, max_ball_val + 1), fill_value=0)
@@ -205,7 +208,7 @@ def main():
         try:
             col1, col2 = st.columns(2)
             with col1:
-                st.subheader("🔥 Top 5 Hot Numbers")
+                st.subheader("Top 5 Hot Numbers")
                 hot_df = pd.DataFrame({
                     "Number": sorted_freqs.head(5).index,
                     "Draws Count": sorted_freqs.head(5).values,
@@ -214,7 +217,7 @@ def main():
                 st.dataframe(hot_df, width="stretch")
                 
             with col2:
-                st.subheader("❄️ Bottom 5 Cold Numbers")
+                st.subheader("Bottom 5 Cold Numbers")
                 cold_df = pd.DataFrame({
                     "Number": sorted_freqs.tail(5).index,
                     "Draws Count": sorted_freqs.tail(5).values,
@@ -226,7 +229,7 @@ def main():
             
     # ==================== TAB 2: LIVE STATS SUITE ====================
     with tab2:
-        st.header("🧮 Live Randomness & Independence Tests")
+        st.header("Live Randomness & Independence Tests")
         st.markdown("Run standard mathematical tests dynamically over the selected date range.")
         st.markdown("---")
         
@@ -290,7 +293,7 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             
-        st.markdown("### 📊 Draw Sum Normality Trend")
+        st.markdown("### Draw Sum Normality Trend")
         # Histogram of draw sums
         try:
             fig_sums, ax_sums = plt.subplots(figsize=(8, 4))
@@ -308,7 +311,7 @@ def main():
         
     # ==================== TAB 3: PARITY SPLITS ====================
     with tab3:
-        st.header("⚖️ Parity Distributions (Odd vs. Even)")
+        st.header("Parity Distributions (Odd vs. Even)")
         st.markdown(f"Evaluates if odd/even ball ratios match binomial expectations $B({num_main}, 0.5)$.")
         
         try:
@@ -327,7 +330,7 @@ def main():
             ax_parity.legend()
             st.pyplot(fig_parity)
             
-            st.subheader("📊 Observed Parity Counts Table")
+            st.subheader("Observed Parity Counts Table")
             parity_df = pd.DataFrame({
                 "Odd Balls Count": [f"{i} Odd / {num_main - i} Even" for i in range(num_main + 1)],
                 "Observed Draws": obs,
@@ -341,7 +344,7 @@ def main():
         
     # ==================== TAB 4: HISTORY SEARCH ====================
     with tab4:
-        st.header("🔍 Historical Draws Database Search")
+        st.header("Historical Draws Database Search")
         st.markdown("Search past draw records, winning numbers, and generated features.")
         
         # User search queries
