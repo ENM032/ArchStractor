@@ -58,4 +58,5 @@ jobs:
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add data/dataset_2.txt data/dataset_lotto.txt data/dataset_xtra.txt data/cleaned/ docs/
         git commit -m "Auto-update lottery datasets & charts [skip ci]" || echo "No changes to commit"
+        git pull --rebase origin main
         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
