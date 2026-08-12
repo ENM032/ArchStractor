@@ -16,6 +16,14 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
+    - name: Cache Scraping HTML Files
+      uses: actions/cache@v3
+      with:
+        path: .cache
+        key: lottery-html-cache-${{ github.run_id }}
+        restore-keys: |
+          lottery-html-cache-
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
