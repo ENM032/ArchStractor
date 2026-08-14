@@ -31,7 +31,7 @@ def get_cache_path(url: str) -> Optional[str]:
     
     if game_match and year_match:
         game = game_match.group(1)
-        year = int(year_match.group(2) if year_match.lastindex and year_match.lastindex >= 2 else year_match.group(1))
+        year = int(year_match.group(1))
         
         # Only cache historical years. Do not cache current or future years.
         current_year = date.today().year

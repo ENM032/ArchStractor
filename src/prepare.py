@@ -17,6 +17,7 @@ from scraper import fetch_page, get_cache_path
 from parser import parse_html_page
 from formatter import parse_txt_dataset
 from validator import validate_draw_data
+from config import GAME_PRESETS, DEFAULT_GAME
 
 # Configure logging
 log_format = "%(asctime)s [%(levelname)s] %(message)s"
@@ -53,12 +54,7 @@ def fetch_and_parse_crawled_draws(game: str, start_year: int, end_year: int) -> 
     crawled_draws = []
     
     # Resolve URL template
-    if game == "powerball-xtra":
-        url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
-    elif game == "lotto":
-        url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
-    else:
-        url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+    url_template = GAME_PRESETS.get(game, GAME_PRESETS[DEFAULT_GAME])["url_template"]
         
     for year in range(start_year, end_year + 1):
         url = url_template.format(year=year)

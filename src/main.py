@@ -11,6 +11,7 @@ from scraper import fetch_page
 from parser import parse_html_page
 from formatter import parse_existing_dataset, append_new_results
 from validator import validate_draw_data
+from config import GAME_PRESETS, DEFAULT_GAME
 
 # Set up logging to both console and a file for robust tracking
 log_format = "%(asctime)s [%(levelname)s] %(message)s"
@@ -141,12 +142,7 @@ def run_interactive_wizard() -> Tuple[int, int, Optional[str], str, Optional[str
         print("Extraction canceled.")
         sys.exit(0)
         
-    if game == "powerball-xtra":
-        url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
-    elif game == "lotto":
-        url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
-    else:
-        url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+    url_template = GAME_PRESETS.get(game, GAME_PRESETS[DEFAULT_GAME])["url_template"]
         
     return start_year, end_year, url_template, output_path, game
 
@@ -179,13 +175,8 @@ def main():
             # Determine URL Template based on preset or custom value
             url_template = args.url_template
             if not url_template:
-                game = args.game or "powerball"
-                if game == "powerball-xtra":
-                    url_template = "https://za.national-lottery.com/powerball-xtra/results/{year}-archive"
-                elif game == "lotto":
-                    url_template = "https://za.national-lottery.com/lotto/results/{year}-archive"
-                else:
-                    url_template = "https://za.national-lottery.com/powerball/results/{year}-archive"
+                game = args.game or DEFAULT_GAME
+                url_template = GAME_PRESETS.get(game, GAME_PRESETS[DEFAULT_GAME])["url_template"]
 
         logger.info("Starting SA Lottery Draw Results Extraction process")
         logger.info(f"Configuration: Start={start_year}, End={end_year}, Game URL template={url_template}, Output={output_path}")

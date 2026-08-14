@@ -29,11 +29,12 @@ def validate_draw_data(
         return False, f"Expected exactly {num_main_balls} main numbers, got {len(main_balls)}: {main_balls}"
         
     # 4. Main balls types and ranges
+    max_main = 58 if num_main_balls == 6 else 50
     for ball in main_balls:
         if not isinstance(ball, int):
             return False, f"Main number '{ball}' is not an integer"
-        if not (1 <= ball <= 58):
-            return False, f"Main number {ball} is out of valid range [1, 58]"
+        if not (1 <= ball <= max_main):
+            return False, f"Main number {ball} is out of valid range [1, {max_main}]"
             
     # 5. Main balls uniqueness
     if len(set(main_balls)) != num_main_balls:
@@ -45,7 +46,8 @@ def validate_draw_data(
             return False, "PowerBall/Bonus number is missing"
         if not isinstance(powerball, int):
             return False, f"PowerBall/Bonus '{powerball}' is not an integer"
-        if not (1 <= powerball <= 58):
-            return False, f"PowerBall/Bonus {powerball} is out of valid range [1, 58]"
+        max_pb = 58 if num_main_balls == 6 else 20
+        if not (1 <= powerball <= max_pb):
+            return False, f"PowerBall/Bonus {powerball} is out of valid range [1, {max_pb}]"
             
     return True, ""

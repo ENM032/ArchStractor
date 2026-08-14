@@ -8,6 +8,7 @@ import seaborn as sns
 import streamlit as st
 import math
 from typing import List, Tuple
+from stats_tests import run_wald_wolfowitz_runs_test, run_uniformity_test, run_parity_binomial_test
 
 # Set up page configurations
 st.set_page_config(
@@ -71,61 +72,20 @@ def load_game_data(filepath: str) -> pd.DataFrame:
 # Helper runs test calculation
 @st.cache_data
 def calculate_runs_test(sequence: Tuple[int, ...]) -> Tuple[int, float, float]:
-    """Wald-Wolfowitz Runs Test for sequence independence."""
-    if len(sequence) < 2:
-        return 0, 0.0, 1.0
-    sorted_seq = sorted(sequence)
-    median_val = sorted_seq[len(sorted_seq) // 2]
-    
-    binary_seq = [1 if x > median_val else 0 for x in sequence]
-    n1 = sum(binary_seq)
-    n2 = len(binary_seq) - n1
-    
-    if n1 == 0 or n2 == 0:
-        return 1, 0.0, 1.0
-        
-    runs = 1
-    for i in range(1, len(binary_seq)):
-        if binary_seq[i] != binary_seq[i-1]:
-            runs += 1
-            
-    expected_runs = (2.0 * n1 * n2) / (n1 + n2) + 1.0
-    variance = (2.0 * n1 * n2 * (2.0 * n1 * n2 - n1 - n2)) / (((n1 + n2) ** 2) * (n1 + n2 - 1))
-    
-    if variance == 0:
-        return runs, 0.0, 1.0
-        
-    z_stat = (runs - expected_runs) / math.sqrt(variance)
-    p_val = stats.norm.sf(abs(z_stat)) * 2.0
-    
-    return runs, z_stat, p_val
+    """Wald-Wolfowitz Runs Test for sequence independence (delegated)."""
+    return run_wald_wolfowitz_runs_test(list(sequence))
 
 # Helper Chi-Square Uniformity calculation
 @st.cache_data
 def calculate_uniformity_test(numbers: Tuple[int, ...], max_val: int) -> Tuple[float, float]:
-    num_bins = max_val
-    observed = [0] * num_bins
-    for num in numbers:
-        if 1 <= num <= max_val:
-            observed[num - 1] += 1
-    expected = [len(numbers) / num_bins] * num_bins
-    chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
-    return chi2, p_val
+    """Chi-Square Goodness-of-Fit uniformity test (delegated)."""
+    return run_uniformity_test(list(numbers), 1, max_val)
 
 # Helper Parity Binomial calculation
 @st.cache_data
 def calculate_parity_test(odd_counts: Tuple[int, ...], num_main: int) -> Tuple[float, float, List[int], List[float]]:
-    total = len(odd_counts)
-    observed = [0] * (num_main + 1)
-    for k in odd_counts:
-        if 0 <= k <= num_main:
-            observed[k] += 1
-    expected = []
-    for k in range(num_main + 1):
-        pmf_val = stats.binom.pmf(k, num_main, 0.5)
-        expected.append(total * pmf_val)
-    chi2, p_val = stats.chisquare(f_obs=observed, f_exp=expected)
-    return chi2, p_val, observed, expected
+    """Chi-Square Parity Binomial distribution test (delegated)."""
+    return run_parity_binomial_test(list(odd_counts), num_main)
 
 def main():
     st.title("SA National Lottery Data Analytics Dashboard")
