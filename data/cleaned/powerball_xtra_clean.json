@@ -33785,5 +33785,28 @@
     "odd_count": 3,
     "even_count": 2,
     "is_powerball_even": 1
+  },
+  {
+    "day": 1470,
+    "date": "2026-08-21",
+    "year": 2026,
+    "month": 8,
+    "day_of_month": 21,
+    "day_of_week": 4,
+    "is_weekend": 0,
+    "powerball": 2,
+    "ball_1": 17,
+    "ball_2": 23,
+    "ball_3": 37,
+    "ball_4": 39,
+    "ball_5": 48,
+    "sum_main_balls": 164,
+    "mean_main_balls": 32.8,
+    "min_main_ball": 17,
+    "max_main_ball": 48,
+    "range_main_balls": 31,
+    "odd_count": 4,
+    "even_count": 1,
+    "is_powerball_even": 1
   }
 ]
