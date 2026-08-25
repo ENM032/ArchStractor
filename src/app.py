@@ -269,7 +269,7 @@ def main():
             ax_freq.set_ylabel("Occurrences")
             ax_freq.set_xticks(range(1, max_ball_val + 1, 2 if max_ball_val > 40 else 1))
             ax_freq.legend()
-            st.pyplot(fig_freq, use_container_width=True)
+            st.pyplot(fig_freq, width="stretch")
         except Exception as e:
             st.error(f"Error rendering frequency distribution plot: {e}")
             plt.close()
@@ -373,7 +373,7 @@ def main():
             ax_sums.plot(x_range, stats.norm.pdf(x_range, mu_sum, sigma_sum), color='#d62728', linewidth=2, label='Fitted Normal')
             ax_sums.set_title(f"Distribution of Draw Sums (Mean={mu_sum:.1f}, Std={sigma_sum:.1f})")
             ax_sums.legend()
-            st.pyplot(fig_sums, use_container_width=True)
+            st.pyplot(fig_sums, width="stretch")
         except Exception as e:
             st.error(f"Error rendering draw sum normality trend: {e}")
             plt.close()
@@ -397,7 +397,7 @@ def main():
             ax_parity.set_ylabel("Occurrences")
             ax_parity.set_xticks(x)
             ax_parity.legend()
-            st.pyplot(fig_parity, use_container_width=True)
+            st.pyplot(fig_parity, width="stretch")
             
             st.subheader("Observed Parity Counts Table")
             parity_df = pd.DataFrame({
@@ -725,7 +725,7 @@ def main():
                     "historic_match": "Historical Match Outcome"
                 })
                 history_df['Compliant?'] = history_df['Compliant?'].map({1: "Yes", 0: "No"})
-                st.dataframe(history_df, use_container_width=True)
+                st.dataframe(history_df, width="stretch")
         else:
             st.write("No guess logs saved in history database yet.")
 
