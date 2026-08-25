@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
@@ -9,7 +10,7 @@ import streamlit as st
 import math
 from typing import List, Tuple
 from stats_tests import run_wald_wolfowitz_runs_test, run_uniformity_test, run_parity_binomial_test
-from user_db import save_user_guess, get_user_history, clear_user_history
+from user_db import save_user_guess, get_user_history, clear_user_history, create_user, authenticate_user
 
 # Set up page configurations
 st.set_page_config(
@@ -88,12 +89,92 @@ def calculate_parity_test(odd_counts: Tuple[int, ...], num_main: int) -> Tuple[f
     """Chi-Square Parity Binomial distribution test (delegated)."""
     return run_parity_binomial_test(list(odd_counts), num_main)
 
+SESSION_FILE = "data/.session.json"
+
+def load_session_user() -> str:
+    """Reads the saved login session, returning the username or 'Guest'."""
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("username", "Guest")
+        except Exception:
+            pass
+    return "Guest"
+
+def save_session_user(username: str):
+    """Saves the login session to a local JSON file."""
+    os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
+    try:
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump({"username": username}, f)
+    except Exception:
+        pass
+
+def clear_session_user():
+    """Removes the login session file."""
+    if os.path.exists(SESSION_FILE):
+        try:
+            os.remove(SESSION_FILE)
+        except Exception:
+            pass
+
 def main():
+    # Initialize session username if not present
+    if "username" not in st.session_state:
+        st.session_state["username"] = load_session_user()
+        
     st.title("SA National Lottery Data Analytics Dashboard")
     st.markdown("Interactive analysis of historical results, statistical checks, and ML feature distributions.")
     st.markdown("---")
     
     # Sidebar Configuration
+    st.sidebar.markdown("### 👤 User Profile")
+    current_user = st.session_state["username"]
+    
+    if current_user != "Guest":
+        st.sidebar.write(f"Logged in as: **{current_user}**")
+        if st.sidebar.button("Log Out"):
+            clear_session_user()
+            st.session_state["username"] = "Guest"
+            if "analyzed_guess" in st.session_state:
+                del st.session_state["analyzed_guess"]
+            st.success("Logged out successfully!")
+            st.rerun()
+    else:
+        auth_mode = st.sidebar.radio("Profile Account:", ["Login", "Register"], label_visibility="collapsed")
+        
+        username_input = st.sidebar.text_input("Username:", key="auth_username").strip()
+        password_input = st.sidebar.text_input("Password:", type="password", key="auth_password")
+        
+        if auth_mode == "Login":
+            if st.sidebar.button("Login"):
+                if authenticate_user(username_input, password_input):
+                    save_session_user(username_input)
+                    st.session_state["username"] = username_input
+                    if "analyzed_guess" in st.session_state:
+                        del st.session_state["analyzed_guess"]
+                    st.sidebar.success(f"Welcome back, {username_input}!")
+                    st.rerun()
+                else:
+                    st.sidebar.error("Invalid username or password.")
+        else:
+            if st.sidebar.button("Register"):
+                if not username_input or not password_input:
+                    st.sidebar.error("Please fill in all fields.")
+                else:
+                    success, msg = create_user(username_input, password_input)
+                    if success:
+                        save_session_user(username_input)
+                        st.session_state["username"] = username_input
+                        if "analyzed_guess" in st.session_state:
+                            del st.session_state["analyzed_guess"]
+                        st.sidebar.success(f"Account created! Welcome, {username_input}!")
+                        st.rerun()
+                    else:
+                        st.sidebar.error(msg)
+                        
+    st.sidebar.markdown("---")
     st.sidebar.header("Configuration Preset")
     game_preset = st.sidebar.selectbox(
         "Select Game Preset:",
@@ -481,6 +562,7 @@ def main():
                     powerball=guess_pb,
                     is_valid=True,
                     validation_message="Valid",
+                    username=st.session_state["username"],
                     odd_even_ratio=f"{odds_count}O:{evens_count}E",
                     draw_sum=guess_sum,
                     average_frequency=round(avg_freq, 2),
@@ -619,12 +701,12 @@ def main():
         st.subheader("Your Guess History")
         
         # Load history from DB
-        history = get_user_history(game_preset)
+        history = get_user_history(game_preset, username=st.session_state["username"])
         if history:
             col_clear, _ = st.columns([1, 4])
             with col_clear:
                 if st.button("Clear Saved Guesses"):
-                    clear_user_history(game_preset)
+                    clear_user_history(game_preset, username=st.session_state["username"])
                     st.success("Guess history deleted!")
                     st.rerun()
                     

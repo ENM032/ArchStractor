@@ -15,3 +15,7 @@ preparation.log
 
 # Ignore local HTML cache directory
 .cache/
+
+# Ignore local databases and user login sessions
+data/*.db
+data/.session.json
