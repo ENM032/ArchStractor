@@ -545,9 +545,9 @@ def main():
                 (df_filtered['ball_5'] == guess_sorted[4])
             ]
             if num_main_balls == 6:
-                match_query = match_query[df_filtered['ball_6'] == guess_sorted[5]]
+                match_query = match_query[match_query['ball_6'] == guess_sorted[5]]
             if max_pb > 0:
-                match_query = match_query[df_filtered['powerball'] == guess_pb]
+                match_query = match_query[match_query['powerball'] == guess_pb]
                 
             if not match_query.empty:
                 match_date = match_query.iloc[0]['date']

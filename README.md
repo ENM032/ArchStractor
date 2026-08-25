@@ -1,37 +1,78 @@
-# SA PowerBall Results Extractor & Dataset Builder
+# ArchStractor
 
-This utility crawls the South African National Lottery archive pages for PowerBall draw results from 2010 through 2026, validates them, and appends them to a formatted dataset file.
+A data analytics platform for historical South African lottery results (Lotto, PowerBall, and PowerBall Xtra). Features automated scraping, cleaning and preparation of lottery game data, SQL-based database exporting, analytical report generation, and an interactive Streamlit dashboard.
+
+---
+
+## Showcase Previews
+
+### 1. Interactive Dashboard (Frequencies & Statistical Highlights)
+![Frequencies & Highlights](docs/images/showcase_frequencies.png)
+
+### 2. Guess Analyzer & Play Simulator (Tab 5)
+![Guess Analyzer & Play Simulator](docs/images/showcase_guess_analyzer.png)
+
+---
+
+## Key Features
+
+1. **Automated Scraping & Caching (`scraper.py`, `parser.py`)**: 
+   * Fetches results from national lottery archives.
+   * Caches raw HTML locally (`.cache/`) to avoid rate-limiting and minimize network bandwidth.
+2. **Robust Validation Pipeline (`validator.py`, `verify.py`)**:
+   * Validates duplicate balls, ball ranges, and chronological integrity.
+   * Automatically adapts to historical rule changes (such as the Lotto 58-ball matrix transition).
+3. **Data Preparation & Export (`prepare.py`, `formatter.py`)**:
+   * Cleans datasets and engineers statistical features (such as Odd/Even counts, Draw Sums).
+   * Exports sanitized data to CSV, JSON, and local SQLite databases under `data/cleaned/`.
+4. **Data Analytics & Randomness Tests (`stats_tests.py`)**:
+   * Runs Chi-Square Uniformity checks on main balls and PowerBalls.
+   * Performs Wald-Wolfowitz Runs Tests for sequence independence on draw sums.
+   * Compares Odd/Even splits against theoretical Binomial $B(N, 0.5)$ distributions.
+5. **Streamlit Web App & Local User Profiles (`app.py`, `user_db.py`)**:
+   * Interactive sidebar configuration to select game presets (PowerBall, PowerBall Xtra, Lotto) and date sliders.
+   * Hassle-free password-protected profiles using native cryptographic hashing (`hashlib.pbkdf2_hmac`), requiring no compilation setup.
+   * "Remember Me" session auto-login using a local configuration file.
+   * **Monte Carlo Simulator**: Runs up to 1,000,000 randomized draws in under 3.5 seconds to calculate the estimated years needed to hit the jackpot.
+   * **Guess Ledger History**: Tracks and displays past guess results on a local SQLite storage isolated from scraped datasets.
+
+---
 
 ## Project Structure
 
-The project code is modularized inside the `src/` directory:
-- **`src/scraper.py`**: Handles network requests, custom headers, and retries.
-- **`src/parser.py`**: Extracts raw draw dates, main numbers, and PowerBall numbers from webpage tables.
-- **`src/validator.py`**: central validation logic checking date ranges, ball counts (5 main, 1 PowerBall), duplicate numbers inside a draw, and valid numerical ranges.
-- **`src/formatter.py`**: Manages reading, detecting line-endings, and formatting dataset rows chronologically under correct year headers.
-- **`src/main.py`**: The main execution script. Creates a safety backup of the dataset before modification, and features rollback mechanisms.
-- **`src/verify.py`**: Checks the dataset file (`data/dataset_2.txt`) to ensure sequence numbers, brackets, year order, and draw data are completely healthy and valid.
+* **`src/config.py`**: Central preset configs for Lotto and PowerBall rule specifications.
+* **`src/scraper.py`**: Robust HTML retriever with connection retry handling and size limitations.
+* **`src/parser.py`**: CSS-class parser resolving winning numbers and bonus ball items.
+* **`src/validator.py`**: Multi-rule validation engine.
+* **`src/formatter.py`**: Text parser managing raw TXT file formatting and alignment.
+* **`src/prepare.py`**: Cleaning runner translating raw TXT draws into CSV, JSON, and SQLite files.
+* **`src/stats_tests.py`**: CLI report generator executing uniformity, runs, and binomial statistical tests.
+* **`src/app.py`**: Streamlit interactive multi-tab dashboard.
+* **`src/user_db.py`**: SQLite database controller managing logins and guess history.
 
-## Setup
+---
 
-Ensure you have Python 3.8+ installed. Install the required dependencies:
+## Setup & Quick Start
+
+Ensure you have Python 3.8+ installed. Install the dependencies:
 
 ```bash
-pip install requests beautifulsoup4
+pip install -r requirements.txt
 ```
 
-## Usage
-
-### Run Extraction
-To scrape the archive pages, validate findings, and append new results to the dataset:
+### 1. Build and Clean Datasets
+Update the datasets from web archives and compile the databases:
 ```bash
-python src/main.py
+python src/prepare.py
 ```
-This runs the full extraction process, prints a summary, creates a backup file (`data/dataset_2.txt.bak`), and logs the actions to `extraction.log`.
 
-### Verify Dataset
-To run verification checks on the output dataset (`data/dataset_2.txt`):
+### 2. Run CLI Randomness Tests
 ```bash
-python src/verify.py
+python src/stats_tests.py --input data/cleaned/powerball_clean.csv
 ```
-This will parse the file and output whether it passes sequential day indexing, formatting style, and data validation rules.
+
+### 3. Launch Web Dashboard
+```bash
+streamlit run src/app.py
+```
+Open `http://localhost:8501` in your browser. Create a user profile in the sidebar, input your lucky guess, and check its likelihood stats!
