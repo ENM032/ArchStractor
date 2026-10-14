@@ -208558,5 +208558,29 @@
     "odd_count": 3,
     "even_count": 3,
     "is_powerball_even": 0
+  },
+  {
+    "day": 8691,
+    "date": "2026-10-14",
+    "year": 2026,
+    "month": 10,
+    "day_of_month": 14,
+    "day_of_week": 2,
+    "is_weekend": 0,
+    "powerball": 10,
+    "ball_1": 11,
+    "ball_2": 12,
+    "ball_3": 30,
+    "ball_4": 42,
+    "ball_5": 47,
+    "ball_6": 48,
+    "sum_main_balls": 190,
+    "mean_main_balls": 31.67,
+    "min_main_ball": 11,
+    "max_main_ball": 48,
+    "range_main_balls": 37,
+    "odd_count": 2,
+    "even_count": 4,
+    "is_powerball_even": 1
   }
 ]
